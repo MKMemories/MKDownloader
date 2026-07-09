@@ -38,6 +38,8 @@ object MusicQueue {
     var startIndex: Int = 0
     /** Playlist source (si lancé depuis une playlist), pour le retrait direct. */
     var playlistName: String? = null
+    /** true → rouvrir le lecteur sans relancer la file (depuis le mini-lecteur). */
+    var resume: Boolean = false
 }
 
 /** Écran « en lecture » premium, piloté par le service média (lecture en arrière-plan). */
@@ -64,6 +66,8 @@ class MusicPlayerActivity : AppCompatActivity() {
         setContentView(ui.root)
 
         if (MusicQueue.tracks.isEmpty()) { finish(); return }
+        val resume = MusicQueue.resume
+        MusicQueue.resume = false
         requestNotificationsIfNeeded()
 
         ui.closeButton.setOnClickListener { finish() }
@@ -87,10 +91,10 @@ class MusicPlayerActivity : AppCompatActivity() {
         })
 
         renderStatic(MusicQueue.startIndex.coerceIn(MusicQueue.tracks.indices))
-        connectAndPlay()
+        connectAndPlay(resume)
     }
 
-    private fun connectAndPlay() {
+    private fun connectAndPlay(resume: Boolean) {
         ui.musicLoading.isVisible = true
         val token = SessionToken(this, ComponentName(this, MusicService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
@@ -98,8 +102,27 @@ class MusicPlayerActivity : AppCompatActivity() {
         future.addListener({
             controller = future.get()
             controller?.addListener(playerListener)
-            loadQueue()
+            val c = controller
+            if (resume && c != null && c.mediaItemCount > 0) adoptExisting(c)
+            else loadQueue()
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * Ouverture depuis le mini-lecteur : la file joue déjà dans le service, on
+     * s'y raccroche sans re-résoudre les flux ni redémarrer le morceau.
+     */
+    private fun adoptExisting(c: MediaController) {
+        queue = (0 until c.mediaItemCount).mapNotNull { i ->
+            val id = c.getMediaItemAt(i).mediaId
+            MusicQueue.tracks.find { t -> t.url == id }
+        }
+        ui.musicLoading.isVisible = false
+        ui.playPauseButton.setIconResource(
+            if (c.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        )
+        handler.post(ticker)
+        renderCurrent()
     }
 
     private fun loadQueue() {

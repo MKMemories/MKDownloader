@@ -1,5 +1,6 @@
 package com.mkmemories.mkdownloader
 
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -10,13 +11,19 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatEditText
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.common.util.concurrent.ListenableFuture
 import com.mkmemories.mkdownloader.databinding.ActivityMainBinding
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -27,6 +34,7 @@ import kotlinx.coroutines.launch
 private const val BLAST_URL = "https://www.youtube.com/@Blast_Info"
 private const val BLAST_QUERY = "Blast Le souffle de l'info"
 
+@UnstableApi
 class MainActivity : AppCompatActivity() {
 
     private lateinit var ui: ActivityMainBinding
@@ -45,6 +53,13 @@ class MainActivity : AppCompatActivity() {
     private var lastQuery: String = ""
     private var busy = false
     private val suggestJobs = HashMap<Int, Job>()
+
+    // Mini-lecteur : contrôleur média branché sur le service musical.
+    private var miniControllerFuture: ListenableFuture<MediaController>? = null
+    private var miniController: MediaController? = null
+    private val miniListener = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) = refreshMini()
+    }
 
     /** Autocomplétion YouTube en direct, habillage premium. */
     private fun attachSuggestions(field: AutoCompleteTextView, onPick: () -> Unit) {
@@ -103,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         wireMusic()
         wireFavorites()
         wireHistory()
+        wireMiniPlayer()
 
         ui.bottomNav.setOnItemSelectedListener { item ->
             showPane(item.itemId); true
@@ -159,12 +175,63 @@ class MainActivity : AppCompatActivity() {
         Downloads.onChange = ::renderDownloadState
         Downloads.onHistoryChanged = { if (ui.historyPane.isVisible) refreshHistory() }
         renderDownloadState(Downloads.state)
+        bindMiniController()
     }
 
     override fun onStop() {
         super.onStop()
         Downloads.onChange = null
         Downloads.onHistoryChanged = null
+        releaseMiniController()
+    }
+
+    // ---------- MINI-LECTEUR ----------
+
+    private fun wireMiniPlayer() {
+        ui.miniPlayer.setOnClickListener {
+            if (MusicQueue.tracks.isEmpty()) return@setOnClickListener
+            MusicQueue.resume = true
+            startActivity(Intent(this, MusicPlayerActivity::class.java))
+        }
+        ui.miniPlayPause.setOnClickListener {
+            miniController?.let { if (it.isPlaying) it.pause() else it.play() }
+        }
+        ui.miniClose.setOnClickListener {
+            miniController?.apply { stop(); clearMediaItems() }
+            ui.miniPlayer.isVisible = false
+        }
+    }
+
+    private fun bindMiniController() {
+        val token = SessionToken(this, ComponentName(this, MusicService::class.java))
+        val future = MediaController.Builder(this, token).buildAsync()
+        miniControllerFuture = future
+        future.addListener({
+            miniController = runCatching { future.get() }.getOrNull()
+            miniController?.addListener(miniListener)
+            refreshMini()
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun releaseMiniController() {
+        miniController?.removeListener(miniListener)
+        miniControllerFuture?.let { MediaController.releaseFuture(it) }
+        miniController = null
+        miniControllerFuture = null
+    }
+
+    private fun refreshMini() {
+        val c = miniController
+        val md = c?.currentMediaItem?.mediaMetadata
+        val hasTrack = c != null && c.mediaItemCount > 0 && md != null
+        ui.miniPlayer.isVisible = hasTrack
+        if (!hasTrack) return
+        ui.miniTitle.text = md?.title ?: ""
+        ui.miniArtist.text = md?.artist ?: ""
+        md?.artworkUri?.let { ui.miniArt.load(it) }
+        ui.miniPlayPause.setIconResource(
+            if (c!!.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
