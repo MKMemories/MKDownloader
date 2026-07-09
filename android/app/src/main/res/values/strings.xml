@@ -119,4 +119,8 @@
     <string name="next">Suivant</string>
     <string name="repeat">Répéter</string>
     <string name="create_playlist_first">Créez d\'abord une playlist dans l\'onglet Musique.</string>
+    <string name="remove_from_playlist">− Retirer de la playlist</string>
+    <string name="removed_from">Retiré de « %1$s »</string>
+    <string name="fav_added">Ajouté aux favoris ★</string>
+    <string name="fav_removed">Retiré des favoris</string>
 </resources>

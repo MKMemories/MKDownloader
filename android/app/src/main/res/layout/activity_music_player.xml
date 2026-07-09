@@ -56,20 +56,28 @@
                 app:iconTint="@color/text" />
         </LinearLayout>
 
-        <!-- Pochette -->
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/musicArt"
+        <Space
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginHorizontal="8dp"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp"
-            android:adjustViewBounds="true"
-            android:background="@color/card"
-            android:contentDescription="@string/thumb_desc"
-            android:scaleType="centerCrop"
-            app:shapeAppearanceOverlay="@style/RoundedArt" />
+            android:layout_weight="1" />
+
+        <!-- Pochette compacte, centrée -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="16dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/musicArt"
+                android:layout_width="260dp"
+                android:layout_height="260dp"
+                android:background="@color/card"
+                android:contentDescription="@string/thumb_desc"
+                android:scaleType="centerCrop" />
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- Titre + artiste + favori -->
         <LinearLayout
@@ -235,6 +243,11 @@
                 android:layout_height="wrap_content"
                 android:text="@string/add_to_playlist" />
         </LinearLayout>
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
     </LinearLayout>
 
     <ProgressBar

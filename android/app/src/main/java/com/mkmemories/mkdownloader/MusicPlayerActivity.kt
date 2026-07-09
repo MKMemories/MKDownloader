@@ -36,6 +36,8 @@ import kotlinx.coroutines.withContext
 object MusicQueue {
     var tracks: List<VideoItem> = emptyList()
     var startIndex: Int = 0
+    /** Playlist source (si lancé depuis une playlist), pour le retrait direct. */
+    var playlistName: String? = null
 }
 
 /** Écran « en lecture » premium, piloté par le service média (lecture en arrière-plan). */
@@ -72,7 +74,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         ui.repeatButton.setOnClickListener { cycleRepeat() }
         ui.favButton.setOnClickListener { toggleFav() }
         ui.downloadButton.setOnClickListener { currentTrack()?.let { downloadMp3(it) } }
-        ui.addPlaylistButton.setOnClickListener { currentTrack()?.let { choosePlaylist(it) } }
+        ui.addPlaylistButton.setOnClickListener { togglePlaylist() }
         ui.queueButton.setOnClickListener { showQueue() }
 
         ui.seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -165,6 +167,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         ui.musicArtist.text = md?.artist ?: ""
         loadArt(md?.artworkUri?.toString())
         updateFavIcon()
+        updatePlaylistButton()
         val dur = controller?.duration ?: 0L
         ui.durTime.text = formatMs(if (dur > 0) dur else 0)
     }
@@ -235,17 +238,41 @@ class MusicPlayerActivity : AppCompatActivity() {
     }
 
     private fun toggleFav() {
-        val t = currentTrack() ?: return
-        Favorites.toggleVideo(this, t)
+        val t = currentTrack() ?: run { toast(getString(R.string.no_audio)); return }
+        val added = Favorites.toggleVideo(this, t)
         updateFavIcon()
+        toast(getString(if (added) R.string.fav_added else R.string.fav_removed))
     }
 
     private fun updateFavIcon() {
         val t = currentTrack() ?: return
+        val fav = Favorites.isVideoFav(this, t.url)
         ui.favButton.setIconResource(
-            if (Favorites.isVideoFav(this, t.url)) android.R.drawable.btn_star_big_on
-            else android.R.drawable.btn_star_big_off
+            if (fav) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
         )
+        ui.favButton.setIconTintResource(if (fav) R.color.accent2 else R.color.text_dim)
+    }
+
+    private fun togglePlaylist() {
+        val t = currentTrack() ?: return
+        val pl = MusicQueue.playlistName
+        if (pl == null) { choosePlaylist(t); return }
+        val inList = Favorites.tracksOf(this, pl).any { it.url == t.url }
+        if (inList) {
+            Favorites.removeFromPlaylist(this, pl, t.url)
+            toast(getString(R.string.removed_from, pl))
+        } else {
+            Favorites.addToPlaylist(this, pl, t)
+            toast(getString(R.string.added_to, pl))
+        }
+        updatePlaylistButton()
+    }
+
+    private fun updatePlaylistButton() {
+        val t = currentTrack()
+        val pl = MusicQueue.playlistName
+        val inList = pl != null && t != null && Favorites.tracksOf(this, pl).any { it.url == t.url }
+        ui.addPlaylistButton.setText(if (inList) R.string.remove_from_playlist else R.string.add_to_playlist)
     }
 
     private fun downloadMp3(t: VideoItem) {

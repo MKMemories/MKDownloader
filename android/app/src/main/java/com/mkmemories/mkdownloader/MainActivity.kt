@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.widget.AutoCompleteTextView
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +18,8 @@ import coil.load
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.mkmemories.mkdownloader.databinding.ActivityMainBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -36,6 +39,28 @@ class MainActivity : AppCompatActivity() {
     private var sourceFilter: String = "Tout"
     private var lastQuery: String = ""
     private var busy = false
+    private val suggestJobs = HashMap<Int, Job>()
+
+    /** Autocomplétion YouTube en direct sur un champ de recherche. */
+    private fun attachSuggestions(field: AutoCompleteTextView, onPick: () -> Unit) {
+        val adapter = SuggestionsAdapter(this)
+        field.setAdapter(adapter)
+        field.threshold = 1
+        field.setOnItemClickListener { _, _, _, _ -> onPick() }
+        field.addTextChangedListener { editable ->
+            val q = editable?.toString()?.trim().orEmpty()
+            suggestJobs[field.id]?.cancel()
+            if (q.length < 2 || q.startsWith("http")) return@addTextChangedListener
+            suggestJobs[field.id] = lifecycleScope.launch {
+                delay(180)
+                val list = runCatching { Suggest.fetch(q) }.getOrDefault(emptyList())
+                if (list.isNotEmpty()) {
+                    adapter.replace(list)
+                    if (field.hasFocus()) field.showDropDown()
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -226,6 +251,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun wireSearch() {
+        attachSuggestions(ui.searchInput) { submit() }
         ui.searchInput.setOnEditorActionListener { _, _, _ -> submit(); true }
         ui.goButton.setOnClickListener { submit() }
         ui.pasteButton.setOnClickListener { pasteFromClipboard() }
@@ -396,6 +422,7 @@ class MainActivity : AppCompatActivity() {
     // ---------- MUSIQUE ----------
 
     private fun wireMusic() {
+        attachSuggestions(ui.musicInput) { musicSearch() }
         ui.musicInput.setOnEditorActionListener { _, _, _ -> musicSearch(); true }
         ui.musicGo.setOnClickListener { musicSearch() }
         ui.newPlaylist.setOnClickListener { promptNewPlaylist() }
@@ -478,7 +505,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(name)
             .setItems(options) { _, i ->
                 when (i) {
-                    0 -> openMusic(tracks, 0)
+                    0 -> openMusic(tracks, 0, name)
                     1 -> { if (!Downloads.startBatch(this, tracks, AUDIO_QUALITY)) toast(getString(R.string.one_at_a_time)) else toast(getString(R.string.batch_started)) }
                     2 -> confirmDeletePlaylist(name)
                 }
@@ -488,7 +515,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun playPlaylist(name: String) {
         val tracks = Favorites.tracksOf(this, name)
-        if (tracks.isEmpty()) toast(getString(R.string.playlist_empty)) else openMusic(tracks, 0)
+        if (tracks.isEmpty()) toast(getString(R.string.playlist_empty)) else openMusic(tracks, 0, name)
     }
 
     private fun confirmDeletePlaylist(name: String) {
@@ -500,15 +527,17 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openMusic(tracks: List<VideoItem>, startIndex: Int) {
+    private fun openMusic(tracks: List<VideoItem>, startIndex: Int, playlistName: String? = null) {
         MusicQueue.tracks = tracks
         MusicQueue.startIndex = startIndex
+        MusicQueue.playlistName = playlistName
         startActivity(Intent(this, MusicPlayerActivity::class.java))
     }
 
     // ---------- FAVORIS ----------
 
     private fun wireFavorites() {
+        attachSuggestions(ui.channelInput) { channelSearch() }
         ui.channelInput.setOnEditorActionListener { _, _, _ -> channelSearch(); true }
         ui.channelGo.setOnClickListener { channelSearch() }
         ui.favTabs.addOnButtonCheckedListener { _, checkedId, isChecked ->
