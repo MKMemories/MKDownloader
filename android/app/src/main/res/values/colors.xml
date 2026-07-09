@@ -7,6 +7,7 @@
     <color name="accent">#7C5CFF</color>
     <color name="accent2">#21C8FF</color>
     <color name="success">#2EE6A8</color>
+    <color name="danger">#FF6B7A</color>
     <!-- Fond de l'icône adaptative (couleur du logo MK généré) -->
     <color name="ic_bg">#070F22</color>
 </resources>
