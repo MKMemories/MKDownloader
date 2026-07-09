@@ -44,14 +44,25 @@ object Tv {
         TvChannel("Télévision Tunisienne (Watania 1)", "Tunisie", "https://www.youtube.com/@Watania1/live", resolve = true),
     )
 
-    /** Télécharge et parse une playlist IPTV (M3U/M3U8) fournie par l'utilisateur. */
+    /**
+     * Télécharge et parse une playlist IPTV. On privilégie le HLS (output=m3u8),
+     * bien mieux lu par ExoPlayer que le MPEG-TS brut pour du direct ; repli sur
+     * l'URL d'origine si le serveur ne le propose pas.
+     */
     suspend fun fetchIptv(url: String): List<TvChannel> = withContext(Dispatchers.IO) {
+        val hls = url.replace("output=ts", "output=m3u8")
+        val primary = runCatching { download(hls) }.getOrNull()
+        if (!primary.isNullOrEmpty()) return@withContext primary
+        download(url)
+    }
+
+    private fun download(url: String): List<TvChannel> {
         val conn = URL(url).openConnection()
         conn.setRequestProperty("User-Agent", "VLC/3.0 (Linux; Android)")
         conn.connectTimeout = 20000
         conn.readTimeout = 20000
         val text = conn.getInputStream().bufferedReader().use { it.readText() }
-        parseM3u(text)
+        return parseM3u(text)
     }
 
     private fun parseM3u(m3u: String): List<TvChannel> {
