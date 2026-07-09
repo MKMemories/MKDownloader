@@ -201,13 +201,19 @@ object Engine {
                 .lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
         }
 
-    /** URL du meilleur flux audio seul (pour l'écoute musicale en streaming). */
+    /**
+     * URL du flux audio pour l'écoute musicale.
+     * On force l'AAC (m4a, itag 140) : bien plus stable dans ExoPlayer que
+     * l'opus/webm de « bestaudio » (qui causait les coupures au bout de
+     * quelques secondes). Repli sur un flux progressif muxé si besoin.
+     */
     suspend fun audioStreamUrl(context: Context, url: String): String? =
         withContext(Dispatchers.IO) {
             ensureReady(context)
             val request = YoutubeDLRequest(url).apply {
                 addOption("--no-playlist"); addOption("--no-warnings")
-                addOption("-f", "bestaudio/best"); addOption("-g")
+                addOption("-f", "ba[ext=m4a]/ba[acodec^=mp4a]/b[ext=mp4]/ba/b")
+                addOption("-g")
             }
             YoutubeDL.getInstance().execute(request, null, null).out
                 .lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }

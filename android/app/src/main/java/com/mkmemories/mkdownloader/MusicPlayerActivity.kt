@@ -1,9 +1,16 @@
 package com.mkmemories.mkdownloader
 
+import android.content.ComponentName
+import android.graphics.Color
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.view.WindowManager
+import android.os.Handler
+import android.os.Looper
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -11,10 +18,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import coil.load
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import androidx.palette.graphics.Palette
+import coil.ImageLoader
+import coil.request.ImageRequest
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.common.util.concurrent.ListenableFuture
 import com.mkmemories.mkdownloader.databinding.ActivityMusicPlayerBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -28,91 +38,264 @@ object MusicQueue {
     var startIndex: Int = 0
 }
 
-/** Lecteur audio premium : écoute en ligne d'une playlist avec pochette et file d'attente. */
-@androidx.annotation.OptIn(UnstableApi::class)
+/** Écran « en lecture » premium, piloté par le service média (lecture en arrière-plan). */
+@UnstableApi
 class MusicPlayerActivity : AppCompatActivity() {
 
     private lateinit var ui: ActivityMusicPlayerBinding
-    private var player: ExoPlayer? = null
-    private var tracks: List<VideoItem> = emptyList()
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var controller: MediaController? = null
+    private var queue: List<VideoItem> = emptyList()
+    private var seeking = false
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val ticker = object : Runnable {
+        override fun run() {
+            updateProgress()
+            handler.postDelayed(this, 500)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ui = ActivityMusicPlayerBinding.inflate(layoutInflater)
         setContentView(ui.root)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        tracks = MusicQueue.tracks
-        if (tracks.isEmpty()) { finish(); return }
+        if (MusicQueue.tracks.isEmpty()) { finish(); return }
+        requestNotificationsIfNeeded()
+
         ui.closeButton.setOnClickListener { finish() }
-        renderTrack(MusicQueue.startIndex.coerceIn(tracks.indices))
-        resolveAndPlay()
+        ui.playPauseButton.setOnClickListener { togglePlay() }
+        ui.nextButton.setOnClickListener { controller?.seekToNextMediaItem() }
+        ui.prevButton.setOnClickListener { controller?.seekToPreviousMediaItem() }
+        ui.shuffleButton.setOnClickListener { toggleShuffle() }
+        ui.repeatButton.setOnClickListener { cycleRepeat() }
+        ui.favButton.setOnClickListener { toggleFav() }
+        ui.downloadButton.setOnClickListener { currentTrack()?.let { downloadMp3(it) } }
+        ui.addPlaylistButton.setOnClickListener { currentTrack()?.let { choosePlaylist(it) } }
+        ui.queueButton.setOnClickListener { showQueue() }
+
+        ui.seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {}
+            override fun onStartTrackingTouch(sb: SeekBar) { seeking = true }
+            override fun onStopTrackingTouch(sb: SeekBar) {
+                seeking = false
+                controller?.let { it.seekTo((it.duration * sb.progress / 100).coerceAtLeast(0)) }
+            }
+        })
+
+        renderStatic(MusicQueue.startIndex.coerceIn(MusicQueue.tracks.indices))
+        connectAndPlay()
     }
 
-    private fun renderTrack(index: Int) {
-        val t = tracks.getOrNull(index) ?: return
-        ui.musicTitle.text = t.title
-        ui.musicArtist.text = t.uploader ?: t.channelName ?: ""
-        if (!t.thumbnail.isNullOrEmpty()) ui.musicArt.load(t.thumbnail)
-    }
-
-    private fun resolveAndPlay() {
+    private fun connectAndPlay() {
         ui.musicLoading.isVisible = true
+        val token = SessionToken(this, ComponentName(this, MusicService::class.java))
+        val future = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            controller = future.get()
+            controller?.addListener(playerListener)
+            loadQueue()
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun loadQueue() {
         lifecycleScope.launch {
             val resolved = try {
                 withContext(Dispatchers.IO) {
-                    tracks.map { t -> async { t to Engine.audioStreamUrl(this@MusicPlayerActivity, t.url) } }.awaitAll()
+                    MusicQueue.tracks.map { t ->
+                        async { t to Engine.audioStreamUrl(this@MusicPlayerActivity, t.url) }
+                    }.awaitAll()
                 }
             } catch (e: Exception) {
-                toast(cleanError(e)); finish(); return@launch
+                toast(cleanError(e)); ui.musicLoading.isVisible = false; return@launch
             }
             val playable = resolved.filter { it.second != null }
-            if (playable.isEmpty()) { toast(getString(R.string.no_audio)); finish(); return@launch }
+            if (playable.isEmpty()) { toast(getString(R.string.no_audio)); ui.musicLoading.isVisible = false; return@launch }
 
-            val httpFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("Mozilla/5.0 (Linux; Android 14)")
-                .setAllowCrossProtocolRedirects(true)
-            val factory = DefaultMediaSourceFactory(httpFactory)
-
-            player = ExoPlayer.Builder(this@MusicPlayerActivity)
-                .setMediaSourceFactory(factory)
-                .build().also { exo ->
-                    ui.playerController.setPlayer(exo)
-                    playable.forEach { (track, streamUrl) ->
-                        exo.addMediaItem(
-                            MediaItem.Builder()
-                                .setUri(streamUrl)
-                                .setMediaMetadata(
-                                    MediaMetadata.Builder()
-                                        .setTitle(track.title)
-                                        .setArtist(track.uploader ?: track.channelName)
-                                        .apply { track.thumbnail?.let { setArtworkUri(it.toUri()) } }
-                                        .build()
-                                )
-                                .build()
-                        )
-                    }
-                    val start = MusicQueue.startIndex.coerceIn(playable.indices)
-                    exo.seekTo(start, 0)
-                    exo.addListener(object : Player.Listener {
-                        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                            ui.musicTitle.text = mediaItem?.mediaMetadata?.title ?: ""
-                            ui.musicArtist.text = mediaItem?.mediaMetadata?.artist ?: ""
-                            mediaItem?.mediaMetadata?.artworkUri?.let { ui.musicArt.load(it) }
-                        }
-                    })
-                    exo.prepare()
-                    exo.playWhenReady = true
-                }
+            queue = playable.map { it.first }
+            val items = playable.map { (t, streamUrl) ->
+                MediaItem.Builder()
+                    .setUri(streamUrl)
+                    .setMediaId(t.url)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(t.title)
+                            .setArtist(t.uploader ?: t.channelName)
+                            .apply { t.thumbnail?.let { setArtworkUri(it.toUri()) } }
+                            .build()
+                    )
+                    .build()
+            }
+            val start = MusicQueue.startIndex.coerceIn(playable.indices)
+            controller?.apply {
+                setMediaItems(items, start, 0)
+                prepare()
+                playWhenReady = true
+            }
             ui.musicLoading.isVisible = false
+            handler.post(ticker)
+            renderCurrent()
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        player?.release()
-        player = null
-        if (!isChangingConfigurations) finish()
+    private val playerListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = renderCurrent()
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            ui.playPauseButton.setIconResource(
+                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            )
+        }
+    }
+
+    private fun currentTrack(): VideoItem? =
+        controller?.currentMediaItemIndex?.let { queue.getOrNull(it) }
+
+    private fun renderStatic(index: Int) {
+        val t = MusicQueue.tracks.getOrNull(index) ?: return
+        ui.musicTitle.text = t.title
+        ui.musicArtist.text = t.uploader ?: t.channelName ?: ""
+        loadArt(t.thumbnail)
+    }
+
+    private fun renderCurrent() {
+        val md = controller?.currentMediaItem?.mediaMetadata
+        ui.musicTitle.text = md?.title ?: ""
+        ui.musicArtist.text = md?.artist ?: ""
+        loadArt(md?.artworkUri?.toString())
+        updateFavIcon()
+        val dur = controller?.duration ?: 0L
+        ui.durTime.text = formatMs(if (dur > 0) dur else 0)
+    }
+
+    private fun loadArt(url: String?) {
+        if (url.isNullOrEmpty()) return
+        val loader = ImageLoader(this)
+        val request = ImageRequest.Builder(this)
+            .data(url)
+            .allowHardware(false)
+            .target { drawable ->
+                ui.musicArt.setImageDrawable(drawable)
+                (drawable as? BitmapDrawable)?.bitmap?.let { bmp ->
+                    Palette.from(bmp).generate { palette ->
+                        val c = palette?.getVibrantColor(
+                            palette.getDominantColor(Color.parseColor("#1B2233"))
+                        ) ?: Color.parseColor("#1B2233")
+                        applyGradient(c)
+                    }
+                }
+            }
+            .build()
+        loader.enqueue(request)
+    }
+
+    private fun applyGradient(color: Int) {
+        val top = Color.argb(200, Color.red(color), Color.green(color), Color.blue(color))
+        val bg = Color.parseColor("#0A0E1A")
+        ui.gradientBg.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bg)
+        )
+    }
+
+    private fun togglePlay() {
+        controller?.let { if (it.isPlaying) it.pause() else it.play() }
+    }
+
+    private fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+        ui.shuffleButton.setIconTintResource(if (c.shuffleModeEnabled) R.color.accent2 else R.color.text_dim)
+    }
+
+    private fun cycleRepeat() {
+        val c = controller ?: return
+        c.repeatMode = when (c.repeatMode) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+        ui.repeatButton.setIconResource(
+            if (c.repeatMode == Player.REPEAT_MODE_ONE) android.R.drawable.ic_menu_today
+            else android.R.drawable.ic_menu_revert
+        )
+        ui.repeatButton.setIconTintResource(
+            if (c.repeatMode == Player.REPEAT_MODE_OFF) R.color.text_dim else R.color.accent2
+        )
+    }
+
+    private fun updateProgress() {
+        val c = controller ?: return
+        val dur = c.duration
+        if (dur > 0 && !seeking) {
+            ui.seek.progress = (c.currentPosition * 100 / dur).toInt().coerceIn(0, 100)
+            ui.posTime.text = formatMs(c.currentPosition)
+            ui.durTime.text = formatMs(dur)
+        }
+    }
+
+    private fun toggleFav() {
+        val t = currentTrack() ?: return
+        Favorites.toggleVideo(this, t)
+        updateFavIcon()
+    }
+
+    private fun updateFavIcon() {
+        val t = currentTrack() ?: return
+        ui.favButton.setIconResource(
+            if (Favorites.isVideoFav(this, t.url)) android.R.drawable.btn_star_big_on
+            else android.R.drawable.btn_star_big_off
+        )
+    }
+
+    private fun downloadMp3(t: VideoItem) {
+        if (!Downloads.start(this, t, AUDIO_QUALITY)) toast(getString(R.string.one_at_a_time))
+        else toast(getString(R.string.download_started))
+    }
+
+    private fun choosePlaylist(t: VideoItem) {
+        val names = Favorites.playlistNames(this)
+        if (names.isEmpty()) { toast(getString(R.string.create_playlist_first)); return }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.add_to_playlist)
+            .setItems(names.toTypedArray()) { _, i ->
+                Favorites.addToPlaylist(this, names[i], t)
+                toast(getString(R.string.added_to, names[i]))
+            }
+            .show()
+    }
+
+    private fun showQueue() {
+        if (queue.isEmpty()) return
+        val labels = queue.mapIndexed { i, t ->
+            (if (i == controller?.currentMediaItemIndex) "▶ " else "") + t.title
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.up_next)
+            .setItems(labels) { _, i -> controller?.seekTo(i, 0) }
+            .show()
+    }
+
+    private fun requestNotificationsIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+    }
+
+    private fun formatMs(ms: Long): String {
+        val totalSec = (ms / 1000).toInt()
+        return "%d:%02d".format(totalSec / 60, totalSec % 60)
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(ticker)
+        controller?.removeListener(playerListener)
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controller = null
+        super.onDestroy()
     }
 
     private fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_LONG).show()

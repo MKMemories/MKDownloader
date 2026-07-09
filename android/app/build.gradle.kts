@@ -11,8 +11,8 @@ android {
         applicationId = "com.mkmemories.mkdownloader"
         minSdk = 29
         targetSdk = 35
-        versionCode = 5
-        versionName = "4.0"
+        versionCode = 6
+        versionName = "4.1"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -64,6 +64,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    // Session média : lecture en arrière-plan + notification/écran verrouillé.
+    implementation("androidx.media3:media3-session:1.4.1")
+    // Couleurs dynamiques extraites de la pochette (dégradé premium).
+    implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Cast (Chromecast, Google TV, enceintes & TV compatibles).
     implementation("androidx.media3:media3-cast:1.4.1")
