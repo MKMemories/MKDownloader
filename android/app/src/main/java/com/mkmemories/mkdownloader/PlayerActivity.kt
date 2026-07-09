@@ -35,6 +35,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     companion object {
         const val EXTRA_URL = "url"
         const val EXTRA_TITLE = "title"
+        // Lecture directe d'un flux (ex. HLS de TV en direct) sans passer par yt-dlp.
+        const val EXTRA_DIRECT = "direct"
     }
 
     private lateinit var ui: ActivityPlayerBinding
@@ -88,18 +90,22 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     private fun resolveAndPlay() {
         ui.playerLoading.isVisible = true
         lifecycleScope.launch {
-            val url = try {
+            val direct = intent.getBooleanExtra(EXTRA_DIRECT, false)
+            val url = if (direct) videoUrl else try {
                 Engine.streamUrl(this@PlayerActivity, videoUrl)
             } catch (e: Exception) {
                 toast(cleanError(e)); finish(); return@launch
             }
             if (url.isNullOrEmpty()) { toast(getString(R.string.no_results)); finish(); return@launch }
 
-            mediaItem = MediaItem.Builder()
+            // Les flux TV en direct sont en HLS (.m3u8) ; on laisse ExoPlayer
+            // déduire le type pour ces liens, MP4 sinon.
+            val builder = MediaItem.Builder()
                 .setUri(url)
-                .setMimeType(MimeTypes.VIDEO_MP4)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(videoTitle).build())
-                .build()
+            if (!direct) builder.setMimeType(MimeTypes.VIDEO_MP4)
+            else if (url.contains(".m3u8")) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            mediaItem = builder.build()
 
             buildExo()
             // Si une session Cast est déjà active, on démarre directement sur le téléviseur.

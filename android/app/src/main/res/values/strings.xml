@@ -7,6 +7,15 @@
     <string name="tab_music">Musique</string>
     <string name="tab_favorites">Favoris</string>
     <string name="tab_history">Historique</string>
+    <string name="tab_tv">Direct TV</string>
+
+    <!-- Direct TV -->
+    <string name="tv">Chaîne TV</string>
+    <string name="tv_header">Direct TV — chaînes françaises en clair</string>
+    <string name="tv_subtitle">Chaînes gratuites diffusées en clair (France TV, Arte…). Contenus payants/DRM non inclus.</string>
+    <string name="tv_filter_hint">Filtrer une chaîne…</string>
+    <string name="tv_empty">Aucune chaîne trouvée.</string>
+    <string name="tv_error">Impossible de charger la liste des chaînes (réseau ?).</string>
 
     <!-- Commun -->
     <string name="go">Rechercher</string>

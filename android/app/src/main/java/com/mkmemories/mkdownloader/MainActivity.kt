@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.view.isVisible
+import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
@@ -27,6 +28,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var channels: ChannelAdapter
     private lateinit var playlists: PlaylistAdapter
     private lateinit var history: HistoryAdapter
+    private lateinit var tv: TvAdapter
+    private var tvAll: List<TvChannel> = emptyList()
 
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
@@ -76,9 +79,11 @@ class MainActivity : AppCompatActivity() {
     private fun showPane(itemId: Int) {
         ui.searchPane.isVisible = itemId == R.id.nav_search
         ui.musicPane.isVisible = itemId == R.id.nav_music
+        ui.tvPane.isVisible = itemId == R.id.nav_tv
         ui.favoritesPane.isVisible = itemId == R.id.nav_favorites
         ui.historyPane.isVisible = itemId == R.id.nav_history
         when (itemId) {
+            R.id.nav_tv -> loadTv()
             R.id.nav_music -> {
                 refreshPlaylists()
                 // Report de la recherche : bascule sans retaper la même requête.
@@ -141,6 +146,48 @@ class MainActivity : AppCompatActivity() {
         history = HistoryAdapter(onOpen = ::openFile, onDelete = ::confirmDeleteEntry)
         ui.historyList.layoutManager = LinearLayoutManager(this)
         ui.historyList.adapter = history
+
+        tv = TvAdapter(onPlay = ::playChannel)
+        ui.tvList.layoutManager = LinearLayoutManager(this)
+        ui.tvList.adapter = tv
+        ui.tvFilter.addTextChangedListener { applyTvFilter() }
+    }
+
+    private fun applyTvFilter() {
+        val q = ui.tvFilter.text?.toString().orEmpty().trim().lowercase()
+        val filtered = if (q.isEmpty()) tvAll
+        else tvAll.filter { it.name.lowercase().contains(q) || (it.group?.lowercase()?.contains(q) == true) }
+        tv.submit(filtered)
+    }
+
+    private fun loadTv() {
+        if (tvAll.isNotEmpty()) { applyTvFilter(); return }
+        ui.tvProgress.isVisible = true
+        ui.tvStatus.isVisible = false
+        lifecycleScope.launch {
+            try {
+                tvAll = Tv.channels()
+                applyTvFilter()
+                if (tvAll.isEmpty()) showTvStatus(getString(R.string.tv_empty))
+            } catch (e: Exception) {
+                showTvStatus(getString(R.string.tv_error))
+            } finally {
+                ui.tvProgress.isVisible = false
+            }
+        }
+    }
+
+    private fun showTvStatus(msg: String) {
+        ui.tvStatus.text = msg
+        ui.tvStatus.isVisible = true
+    }
+
+    private fun playChannel(c: TvChannel) {
+        startActivity(Intent(this, PlayerActivity::class.java).apply {
+            putExtra(PlayerActivity.EXTRA_URL, c.url)
+            putExtra(PlayerActivity.EXTRA_TITLE, c.name)
+            putExtra(PlayerActivity.EXTRA_DIRECT, true)
+        })
     }
 
     // ---------- RECHERCHE ----------
