@@ -213,6 +213,28 @@ object Engine {
         }
 
     /**
+     * Sources de lecture vidéo pour une hauteur maximale donnée (choix de qualité).
+     * Renvoie 1 URL (flux progressif muxé) ou 2 URLs (vidéo + audio à fusionner).
+     */
+    suspend fun playbackSources(context: Context, url: String, maxHeight: Int): List<String> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val fmt = if (maxHeight >= 4000)
+                "bv*+ba/b"
+            else
+                "bv*[height<=$maxHeight]+ba/b[height<=$maxHeight]/b"
+            val request = YoutubeDLRequest(url).apply {
+                addOption("--no-playlist"); addOption("--no-warnings")
+                addOption("-f", fmt)
+                addOption("--extractor-args", "youtube:player_client=android")
+                applyCreds(context, url)
+                addOption("-g")
+            }
+            YoutubeDL.getInstance().execute(request, null, null).out
+                .lineSequence().map { it.trim() }.filter { it.startsWith("http") }.toList()
+        }
+
+    /**
      * URL du flux audio pour l'écoute musicale.
      * On force l'AAC (m4a, itag 140) : bien plus stable dans ExoPlayer que
      * l'opus/webm de « bestaudio » (qui causait les coupures au bout de

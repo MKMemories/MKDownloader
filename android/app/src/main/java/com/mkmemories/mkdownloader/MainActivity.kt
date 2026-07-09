@@ -291,8 +291,9 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, PlayerActivity::class.java).apply {
             putExtra(PlayerActivity.EXTRA_URL, c.url)
             putExtra(PlayerActivity.EXTRA_TITLE, c.name)
-            // resolve=true → passe par yt-dlp (YouTube live, france.tv…)
+            // resolve=true → passe par yt-dlp (YouTube live) ; direct=true → HLS
             putExtra(PlayerActivity.EXTRA_DIRECT, !c.resolve)
+            putExtra(PlayerActivity.EXTRA_LIVE, true)
         })
     }
 

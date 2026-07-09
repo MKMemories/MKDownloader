@@ -115,6 +115,16 @@
     <!-- Lecteur -->
     <string name="cast">Diffuser</string>
     <string name="quality">Qualité</string>
+    <string name="fullscreen">Plein écran</string>
+    <string name="quality_max">Qualité (Max)</string>
+    <string name="quality_label">Qualité (%1$s)</string>
+    <string name="choose_stream_quality">Qualité de lecture</string>
+    <string name="clip_title">Télécharger un extrait</string>
+    <string name="clip_hint">Déplacez les curseurs pour choisir le début et la fin.</string>
+    <string name="clip_from">Début : %1$s</string>
+    <string name="clip_to">Fin : %1$s</string>
+    <string name="clip_invalid">Sélectionnez un extrait valide (fin après le début).</string>
+    <string name="download_clip">⬇ Télécharger l\'extrait</string>
     <string name="now_playing">EN LECTURE</string>
     <string name="up_next">File d\'attente</string>
     <string name="shuffle">Lecture aléatoire</string>

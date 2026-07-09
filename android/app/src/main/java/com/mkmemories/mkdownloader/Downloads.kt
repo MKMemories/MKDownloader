@@ -39,16 +39,23 @@ object Downloads {
         mainHandler.post { onChange?.invoke(next) }
     }
 
-    fun start(context: Context, item: VideoItem, quality: Quality): Boolean {
+    fun start(
+        context: Context,
+        item: VideoItem,
+        quality: Quality,
+        startSec: Int? = null,
+        endSec: Int? = null,
+    ): Boolean {
         if (state.running) return false
         val app = context.applicationContext
-        update(State(running = true, label = item.title))
+        val label = if (startSec != null) "✂ ${item.title}" else item.title
+        update(State(running = true, label = label))
         scope.launch {
             try {
-                downloadOne(app, item, quality) { p -> update(state.copy(percent = p)) }
-                update(State(running = false, label = item.title, percent = 100, message = "Terminé ✔"))
+                downloadOne(app, item, quality, startSec, endSec) { p -> update(state.copy(percent = p)) }
+                update(State(running = false, label = label, percent = 100, message = "Terminé ✔"))
             } catch (e: Exception) {
-                update(State(running = false, label = item.title, error = cleanError(e)))
+                update(State(running = false, label = label, error = cleanError(e)))
             }
         }
         return true
@@ -78,6 +85,8 @@ object Downloads {
         app: Context,
         item: VideoItem,
         quality: Quality,
+        startSec: Int? = null,
+        endSec: Int? = null,
         onProgress: (Int) -> Unit,
     ) {
         Engine.ensureReady(app)
@@ -91,6 +100,11 @@ object Downloads {
                 if (quality.audioMp3) {
                     addOption("--extract-audio")
                     addOption("--audio-format", "mp3")
+                }
+                // Téléchargement d'un extrait (découpe aux points demandés).
+                if (startSec != null && endSec != null && endSec > startSec) {
+                    addOption("--download-sections", "*$startSec-$endSec")
+                    addOption("--force-keyframes-at-cuts")
                 }
                 addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
             }

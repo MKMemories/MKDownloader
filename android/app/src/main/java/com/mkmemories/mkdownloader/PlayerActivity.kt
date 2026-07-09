@@ -3,8 +3,10 @@ package com.mkmemories.mkdownloader
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -22,52 +24,98 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.mkmemories.mkdownloader.databinding.ActivityPlayerBinding
 import kotlinx.coroutines.launch
 
-/** Lecteur vidéo plein écran premium : démarrage rapide, immersif, avec Cast. */
+/** Lecteur vidéo : portrait « à la YouTube » + plein écran, qualité, extrait, Cast. */
 @UnstableApi
 class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
 
     companion object {
         const val EXTRA_URL = "url"
         const val EXTRA_TITLE = "title"
-        // Lecture directe d'un flux (ex. HLS de TV en direct) sans passer par yt-dlp.
-        const val EXTRA_DIRECT = "direct"
+        const val EXTRA_DIRECT = "direct" // flux HLS direct (TV), sans yt-dlp
+        const val EXTRA_LIVE = "live"     // direct TV : plein écran, sans qualité/extrait
     }
 
     private lateinit var ui: ActivityPlayerBinding
     private var exo: ExoPlayer? = null
     private var castPlayer: CastPlayer? = null
-    private var mediaItem: MediaItem? = null
     private var videoUrl = ""
     private var videoTitle = ""
+    private var direct = false
+    private var live = false
+    private var fullscreen = false
+    private var maxHeight = 1080
+    private var durationSec = 0
+    private var sources: List<String> = emptyList()
+
+    private val qualityOptions = listOf(
+        2160 to "4K (max)", 1080 to "1080p", 720 to "720p", 480 to "480p", 360 to "360p"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ui = ActivityPlayerBinding.inflate(layoutInflater)
         setContentView(ui.root)
-
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        enableImmersive()
 
         videoUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
         videoTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
-        ui.playerTitle.text = videoTitle
-        ui.closeButton.setOnClickListener { finish() }
-        ui.downloadFromPlayer.setOnClickListener { askQualityAndDownload() }
+        direct = intent.getBooleanExtra(EXTRA_DIRECT, false)
+        live = intent.getBooleanExtra(EXTRA_LIVE, false)
 
+        ui.clipRange.values = listOf(0f, 100f) // valeurs initiales (requis par RangeSlider)
+        ui.playerTitle.text = videoTitle
+        ui.panelTitle.text = videoTitle
+        ui.closeButton.setOnClickListener { finish() }
+        ui.fullscreenButton.setOnClickListener { if (fullscreen) exitFullscreen() else enterFullscreen() }
+        ui.qualityButton.setOnClickListener { chooseQuality() }
+        ui.downloadButton.setOnClickListener { askQualityAndDownload(null, null) }
+        ui.downloadClipButton.setOnClickListener { downloadClip() }
+        ui.clipRange.addOnChangeListener { _, _, _ -> updateClipLabels() }
         setupCastButton()
 
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (fullscreen && !live) exitFullscreen() else finish()
+            }
+        })
+
         if (videoUrl.isEmpty()) { finish(); return }
+
+        if (live || direct) {
+            // Direct TV : plein écran paysage immersif d'emblée, sans panneau.
+            ui.panel.isVisible = false
+            enterFullscreen()
+        } else {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            setPortraitVideoSize()
+        }
         resolveAndPlay()
     }
 
-    private fun enableImmersive() {
+    // ---------- Dimensions / plein écran ----------
+
+    private fun setPortraitVideoSize() {
+        val w = resources.displayMetrics.widthPixels
+        ui.videoContainer.layoutParams = ui.videoContainer.layoutParams.apply {
+            height = w * 9 / 16
+        }
+    }
+
+    private fun enterFullscreen() {
+        fullscreen = true
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        ui.panel.isVisible = false
+        ui.fullscreenButton.setIconResource(android.R.drawable.ic_menu_view)
+        ui.videoContainer.layoutParams = ui.videoContainer.layoutParams.apply {
+            height = ViewGroup.LayoutParams.MATCH_PARENT
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, ui.root).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -75,108 +123,185 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         }
     }
 
-    private fun setupCastButton() {
-        try {
-            CastButtonFactory.setUpMediaRouteButton(applicationContext, ui.castButton)
-            val castContext = CastContext.getSharedInstance(this)
-            castPlayer = CastPlayer(castContext).also { it.setSessionAvailabilityListener(this) }
-            ui.castButton.isVisible = true
-        } catch (e: Exception) {
-            // Services Google Play/Cast indisponibles : lecture locale uniquement.
-            ui.castButton.isVisible = false
-        }
+    private fun exitFullscreen() {
+        fullscreen = false
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowInsetsControllerCompat(window, ui.root).show(WindowInsetsCompat.Type.systemBars())
+        ui.panel.isVisible = true
+        ui.fullscreenButton.setIconResource(android.R.drawable.ic_menu_crop)
+        setPortraitVideoSize()
     }
+
+    // ---------- Lecture ----------
 
     private fun resolveAndPlay() {
         ui.playerLoading.isVisible = true
         lifecycleScope.launch {
-            val direct = intent.getBooleanExtra(EXTRA_DIRECT, false)
-            val url = if (direct) videoUrl else try {
-                Engine.streamUrl(this@PlayerActivity, videoUrl)
+            sources = try {
+                when {
+                    direct -> listOf(videoUrl)
+                    live -> listOfNotNull(Engine.streamUrl(this@PlayerActivity, videoUrl))
+                    else -> Engine.playbackSources(this@PlayerActivity, videoUrl, maxHeight)
+                }
             } catch (e: Exception) {
                 toast(cleanError(e)); finish(); return@launch
             }
-            if (url.isNullOrEmpty()) { toast(getString(R.string.no_results)); finish(); return@launch }
-
-            // Type déduit du contenu (HLS pour les directs, MP4 pour les vidéos).
-            val builder = MediaItem.Builder()
-                .setUri(url)
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(videoTitle).build())
-            when {
-                url.contains(".m3u8") || url.contains("/manifest/hls") ->
-                    builder.setMimeType(MimeTypes.APPLICATION_M3U8)
-                url.contains(".mpd") -> builder.setMimeType(MimeTypes.APPLICATION_MPD)
-                url.contains(".mp4") -> builder.setMimeType(MimeTypes.VIDEO_MP4)
-            }
-            mediaItem = builder.build()
-
-            buildExo()
-            // Si une session Cast est déjà active, on démarre directement sur le téléviseur.
-            val onCast = castPlayer?.isCastSessionAvailable == true
-            setCurrentPlayer(if (onCast) castPlayer!! else exo!!)
+            if (sources.isEmpty()) { toast(getString(R.string.no_results)); finish(); return@launch }
+            buildAndPlay(0)
             ui.playerLoading.isVisible = false
         }
     }
 
-    private fun buildExo() {
-        // Buffers réduits = image affichée quasi instantanément.
+    private fun httpFactory() = DefaultHttpDataSource.Factory()
+        .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+        .setAllowCrossProtocolRedirects(true)
+
+    private fun mediaItem(url: String): MediaItem {
+        val b = MediaItem.Builder().setUri(url)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(videoTitle).build())
+        when {
+            url.contains(".m3u8") || url.contains("/manifest/hls") -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
+            url.contains(".mpd") -> b.setMimeType(MimeTypes.APPLICATION_MPD)
+            url.contains(".mp4") -> b.setMimeType(MimeTypes.VIDEO_MP4)
+        }
+        return b.build()
+    }
+
+    private fun buildAndPlay(resumeMs: Long) {
+        exo?.release()
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_000)
-            .build()
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-            .setAllowCrossProtocolRedirects(true)
+            .setBufferDurationsMs(20_000, 60_000, 1_500, 3_000).build()
+        val factory = DefaultMediaSourceFactory(httpFactory())
         exo = ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
-            // Gestion du focus audio : démarrer cette lecture met en pause toute
-            // autre lecture en cours (musique en arrière-plan, autre vidéo…).
+            .setMediaSourceFactory(factory)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
-                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(),
-                /* handleAudioFocus = */ true,
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+                true,
             )
             .setHandleAudioBecomingNoisy(true)
-            .build()
+            .build().also { player ->
+                ui.playerView.player = player
+                val src = if (sources.size >= 2) {
+                    MergingMediaSource(
+                        factory.createMediaSource(mediaItem(sources[0])),
+                        factory.createMediaSource(mediaItem(sources[1])),
+                    )
+                } else {
+                    factory.createMediaSource(mediaItem(sources[0]))
+                }
+                player.setMediaSource(src)
+                player.prepare()
+                if (resumeMs > 0) player.seekTo(resumeMs)
+                player.playWhenReady = true
+                player.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(state: Int) {
+                        if (state == Player.STATE_READY && durationSec == 0) {
+                            val d = player.duration
+                            if (d > 0 && !live) setupClip((d / 1000).toInt())
+                        }
+                    }
+                })
+            }
+        // Si une session Cast est active, on y bascule.
+        if (castPlayer?.isCastSessionAvailable == true) castPlayer?.let { switchToCast(it) }
     }
 
-    private fun setCurrentPlayer(player: Player) {
-        val item = mediaItem ?: return
-        val resumePosition = ui.playerView.player?.currentPosition ?: 0L
-        // Débranche l'ancien lecteur
-        exo?.takeIf { it !== player }?.pause()
-        castPlayer?.takeIf { it !== player }?.pause()
+    // ---------- Qualité ----------
 
-        ui.playerView.player = player
-        player.setMediaItem(item, resumePosition)
-        player.prepare()
-        player.playWhenReady = true
+    private fun chooseQuality() {
+        val labels = qualityOptions.map { it.second }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.choose_stream_quality)
+            .setItems(labels) { _, i ->
+                maxHeight = qualityOptions[i].first
+                ui.qualityButton.text = getString(R.string.quality_label, qualityOptions[i].second)
+                reloadKeepingPosition()
+            }
+            .show()
     }
 
-    // ---------- Cast ----------
-
-    override fun onCastSessionAvailable() {
-        castPlayer?.let { setCurrentPlayer(it) }
+    private fun reloadKeepingPosition() {
+        val pos = exo?.currentPosition ?: 0L
+        ui.playerLoading.isVisible = true
+        lifecycleScope.launch {
+            sources = try {
+                Engine.playbackSources(this@PlayerActivity, videoUrl, maxHeight)
+            } catch (e: Exception) { toast(cleanError(e)); ui.playerLoading.isVisible = false; return@launch }
+            if (sources.isNotEmpty()) buildAndPlay(pos)
+            ui.playerLoading.isVisible = false
+        }
     }
 
-    override fun onCastSessionUnavailable() {
-        exo?.let { setCurrentPlayer(it) }
+    // ---------- Extrait ----------
+
+    private fun setupClip(dur: Int) {
+        durationSec = dur
+        ui.clipRange.valueFrom = 0f
+        ui.clipRange.valueTo = dur.toFloat()
+        ui.clipRange.values = listOf(0f, dur.toFloat())
+        ui.clipRange.isEnabled = true
+        ui.downloadClipButton.isEnabled = true
+        updateClipLabels()
     }
 
-    // ---------- Téléchargement depuis le lecteur ----------
+    private fun updateClipLabels() {
+        val v = ui.clipRange.values
+        if (v.size < 2) return
+        ui.clipStart.text = getString(R.string.clip_from, fmt(v[0].toInt()))
+        ui.clipEnd.text = getString(R.string.clip_to, fmt(v[1].toInt()))
+    }
 
-    private fun askQualityAndDownload() {
+    private fun downloadClip() {
+        val v = ui.clipRange.values
+        if (v.size < 2 || v[1] <= v[0]) { toast(getString(R.string.clip_invalid)); return }
+        askQualityAndDownload(v[0].toInt(), v[1].toInt())
+    }
+
+    private fun fmt(sec: Int): String = "%d:%02d".format(sec / 60, sec % 60)
+
+    // ---------- Téléchargement ----------
+
+    private fun askQualityAndDownload(startSec: Int?, endSec: Int?) {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_quality)
             .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
                 val started = Downloads.start(
-                    this, VideoItem(videoUrl, videoTitle, null, 0, null), QUALITIES[index]
+                    this, VideoItem(videoUrl, videoTitle, null, 0, null),
+                    QUALITIES[index], startSec, endSec,
                 )
                 toast(getString(if (started) R.string.download_started else R.string.one_at_a_time))
             }
             .show()
+    }
+
+    // ---------- Cast ----------
+
+    private fun setupCastButton() {
+        try {
+            CastButtonFactory.setUpMediaRouteButton(applicationContext, ui.castButton)
+            castPlayer = CastPlayer(CastContext.getSharedInstance(this))
+                .also { it.setSessionAvailabilityListener(this) }
+            ui.castButton.isVisible = true
+        } catch (e: Exception) {
+            ui.castButton.isVisible = false
+        }
+    }
+
+    private fun switchToCast(cast: CastPlayer) {
+        exo?.pause()
+        ui.playerView.player = cast
+        cast.setMediaItem(mediaItem(sources.first()), exo?.currentPosition ?: 0L)
+        cast.prepare(); cast.playWhenReady = true
+    }
+
+    override fun onCastSessionAvailable() { castPlayer?.let { switchToCast(it) } }
+    override fun onCastSessionUnavailable() {
+        ui.playerView.player = exo
+        exo?.playWhenReady = true
     }
 
     override fun onStop() {
