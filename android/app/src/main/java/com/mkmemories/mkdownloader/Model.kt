@@ -1,12 +1,55 @@
 package com.mkmemories.mkdownloader
 
+import org.json.JSONObject
+
 data class VideoItem(
     val url: String,
     val title: String,
     val uploader: String?,
     val durationSec: Int,
     val thumbnail: String?,
-)
+    val channelName: String? = null,
+    val channelUrl: String? = null,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("url", url); put("title", title); put("uploader", uploader)
+        put("durationSec", durationSec); put("thumbnail", thumbnail)
+        put("channelName", channelName); put("channelUrl", channelUrl)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = VideoItem(
+            url = o.optString("url"),
+            title = o.optString("title", "Vidéo"),
+            uploader = o.optStringOrNull("uploader"),
+            durationSec = o.optInt("durationSec"),
+            thumbnail = o.optStringOrNull("thumbnail"),
+            channelName = o.optStringOrNull("channelName"),
+            channelUrl = o.optStringOrNull("channelUrl"),
+        )
+    }
+}
+
+data class ChannelItem(
+    val url: String,
+    val name: String,
+    val thumbnail: String?,
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("url", url); put("name", name); put("thumbnail", thumbnail)
+    }
+
+    companion object {
+        fun fromJson(o: JSONObject) = ChannelItem(
+            url = o.optString("url"),
+            name = o.optString("name", "Chaîne"),
+            thumbnail = o.optStringOrNull("thumbnail"),
+        )
+    }
+}
+
+fun JSONObject.optStringOrNull(key: String): String? =
+    if (isNull(key)) null else optString(key).ifEmpty { null }
 
 data class Quality(
     val id: String,
@@ -42,6 +85,7 @@ enum class DateFilter(val label: String, val spToken: String?) {
 fun platformOf(url: String): String {
     val u = url.lowercase()
     return when {
+        "music.youtube.com" in u -> "YT Music"
         "youtube.com" in u || "youtu.be" in u -> "YouTube"
         "facebook.com" in u || "fb.watch" in u || "fb.com" in u -> "Facebook"
         "instagram.com" in u || "instagr.am" in u -> "Instagram"

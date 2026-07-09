@@ -1,35 +1,83 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MKDownloader</string>
-    <string name="search_hint">Recherche YouTube ou lien vidéo…</string>
+
+    <!-- Navigation -->
+    <string name="tab_search">Rechercher</string>
+    <string name="tab_music">Musique</string>
+    <string name="tab_favorites">Favoris</string>
+    <string name="tab_history">Historique</string>
+
+    <!-- Commun -->
     <string name="go">Rechercher</string>
     <string name="paste">📋 Coller</string>
     <string name="play">▶ Lire</string>
+    <string name="listen">▶ Écouter</string>
     <string name="download">⬇ Vidéo</string>
     <string name="mp3">♪ MP3</string>
     <string name="open">Ouvrir</string>
     <string name="delete">Supprimer</string>
     <string name="cancel">Annuler</string>
+    <string name="create">Créer</string>
     <string name="close">Fermer</string>
+    <string name="favorite">Favori</string>
+    <string name="more">Plus</string>
+    <string name="thumb_desc">Miniature de la vidéo</string>
+    <string name="channel">Chaîne</string>
 
-    <string name="tab_search">Rechercher</string>
-    <string name="tab_history">Historique</string>
-
+    <!-- Recherche -->
+    <string name="search_hint">Recherche YouTube ou lien vidéo…</string>
     <string name="analyzing">Analyse du lien…</string>
     <string name="searching">Recherche YouTube…</string>
     <string name="searching_recent">Recherche des publications récentes…</string>
     <string name="no_results">Aucun résultat.</string>
+    <string name="add_favorite">☆ Favori</string>
+    <string name="remove_favorite">★ Favori</string>
+    <string name="view_channel">Chaîne ▸</string>
+    <string name="add_channel_fav">Ajouter la chaîne aux favoris</string>
+    <string name="add_to_playlist">Ajouter à une playlist</string>
+    <string name="no_channel">Chaîne introuvable pour cette vidéo.</string>
+    <string name="channel_added">Chaîne ajoutée aux favoris ✔</string>
+    <string name="channel_removed">Chaîne retirée des favoris</string>
+    <string name="channel_header">Chaîne : %1$s</string>
+    <string name="loading_channel">Chargement de la chaîne…</string>
 
+    <!-- Téléchargement -->
     <string name="choose_quality">Qualité du téléchargement</string>
-    <string name="download_started">Téléchargement lancé — suivez la progression sur l\'onglet Rechercher.</string>
+    <string name="download_started">Téléchargement lancé — suivez la progression en bas.</string>
+    <string name="batch_started">Téléchargement de la playlist lancé.</string>
     <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>
     <string name="downloading">Téléchargement… %1$d%%</string>
     <string name="processing">Préparation / fusion en cours…</string>
-
     <string name="update_engine">Mettre à jour yt-dlp</string>
     <string name="updating">Mise à jour de yt-dlp…</string>
-    <string name="thumb_desc">Miniature de la vidéo</string>
 
+    <!-- Musique -->
+    <string name="music_hint">Rechercher un titre, un artiste…</string>
+    <string name="music_search">Chercher un morceau</string>
+    <string name="my_playlists">Mes playlists</string>
+    <string name="new_playlist">+ Playlist</string>
+    <string name="playlist_name">Nom de la playlist</string>
+    <string name="added_to">Ajouté à « %1$s » ✔</string>
+    <string name="playlist_empty">Cette playlist est vide.</string>
+    <string name="listen_all">▶ Tout écouter</string>
+    <string name="download_all_mp3">⬇ Tout télécharger en MP3</string>
+    <string name="delete_playlist">Supprimer la playlist</string>
+    <string name="delete_playlist_msg">Supprimer la playlist « %1$s » ? (les fichiers déjà téléchargés sont conservés)</string>
+    <string name="no_audio">Aucun flux audio lisible.</string>
+
+    <!-- Favoris -->
+    <string name="fav_channels">Chaînes</string>
+    <string name="fav_videos">Vidéos</string>
+    <string name="fav_videos_empty">Aucune vidéo favorite.\nAppuyez sur ☆ pour en ajouter.</string>
+    <string name="channel_search_hint">Rechercher une chaîne YouTube…</string>
+    <string name="open_channel">Ouvrir</string>
+    <string name="searching_channels">Recherche de chaînes…</string>
+    <string name="channel_results">Résultats de la recherche</string>
+    <string name="your_fav_channels">Vos chaînes favorites</string>
+    <string name="no_fav_channels">Aucune chaîne favorite. Recherchez-en une ci-dessus.</string>
+
+    <!-- Historique -->
     <string name="history_empty">Aucun téléchargement pour le moment.\nVos vidéos et MP3 apparaîtront ici.</string>
     <string name="clear_all">Tout effacer</string>
     <string name="cannot_open">Impossible d\'ouvrir ce fichier (peut-être supprimé).</string>
@@ -39,4 +87,8 @@
     <string name="clear_all_message">Voulez-vous seulement vider la liste, ou aussi supprimer les fichiers téléchargés ?</string>
     <string name="clear_list_only">Vider la liste</string>
     <string name="clear_and_files">Liste + fichiers</string>
+
+    <!-- Lecteur -->
+    <string name="cast">Diffuser</string>
+    <string name="quality">Qualité</string>
 </resources>

@@ -15,7 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 
-/** Gestionnaire de téléchargement (un à la fois), indépendant des écrans. */
+/** Gestionnaire de téléchargement (un job à la fois : vidéo unique ou lot de morceaux). */
 object Downloads {
 
     data class State(
@@ -29,7 +29,6 @@ object Downloads {
     @Volatile var state: State = State()
         private set
     var onChange: ((State) -> Unit)? = null
-    /** Notifie l'écran Historique qu'une entrée a été ajoutée. */
     var onHistoryChanged: (() -> Unit)? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -42,54 +41,85 @@ object Downloads {
 
     fun start(context: Context, item: VideoItem, quality: Quality): Boolean {
         if (state.running) return false
-        val appContext = context.applicationContext
+        val app = context.applicationContext
         update(State(running = true, label = item.title))
         scope.launch {
-            val workDir = File(appContext.cacheDir, "dl-${System.currentTimeMillis()}")
             try {
-                Engine.ensureReady(appContext)
-                workDir.mkdirs()
-                val request = YoutubeDLRequest(item.url).apply {
-                    addOption("--no-playlist")
-                    addOption("-f", quality.format)
-                    if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
-                    if (quality.audioMp3) {
-                        addOption("--extract-audio")
-                        addOption("--audio-format", "mp3")
-                    }
-                    addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
-                }
-                YoutubeDL.getInstance().execute(request, item.url.hashCode().toString()) { p, _, _ ->
-                    update(state.copy(percent = if (p in 0f..100f) p.toInt() else -1))
-                }
-                val produced = workDir.listFiles()?.maxByOrNull { it.length() }
-                    ?: error("Le téléchargement n'a produit aucun fichier.")
-                val (savedName, uri) = exportToDownloads(appContext, produced, quality.audioMp3)
-                History.add(
-                    appContext,
-                    HistoryEntry(
-                        id = System.currentTimeMillis().toString(),
-                        title = item.title,
-                        platform = platformOf(item.url),
-                        fileName = produced.name,
-                        uri = uri,
-                        timestamp = System.currentTimeMillis(),
-                        audio = quality.audioMp3,
-                    ),
-                )
-                mainHandler.post { onHistoryChanged?.invoke() }
-                update(State(running = false, label = item.title, percent = 100, message = "Enregistré dans $savedName"))
+                downloadOne(app, item, quality) { p -> update(state.copy(percent = p)) }
+                update(State(running = false, label = item.title, percent = 100, message = "Terminé ✔"))
             } catch (e: Exception) {
                 update(State(running = false, label = item.title, error = cleanError(e)))
-            } finally {
-                workDir.deleteRecursively()
             }
         }
         return true
     }
 
-    /** Copie le fichier dans Téléchargements/MKDownloader ; renvoie (chemin lisible, uri). */
-    private fun exportToDownloads(context: Context, file: File, audio: Boolean): Pair<String, String> {
+    /** Télécharge en lot (ex. tous les morceaux d'une playlist), l'un après l'autre. */
+    fun startBatch(context: Context, items: List<VideoItem>, quality: Quality): Boolean {
+        if (state.running || items.isEmpty()) return false
+        val app = context.applicationContext
+        update(State(running = true, label = "0/${items.size}"))
+        scope.launch {
+            var ok = 0
+            items.forEachIndexed { index, item ->
+                update(state.copy(label = "${index + 1}/${items.size} · ${item.title}", percent = -1))
+                runCatching {
+                    downloadOne(app, item, quality) { p ->
+                        update(state.copy(percent = p))
+                    }
+                }.onSuccess { ok++ }
+            }
+            update(State(running = false, label = "Playlist", percent = 100, message = "$ok/${items.size} morceaux enregistrés"))
+        }
+        return true
+    }
+
+    private suspend fun downloadOne(
+        app: Context,
+        item: VideoItem,
+        quality: Quality,
+        onProgress: (Int) -> Unit,
+    ) {
+        Engine.ensureReady(app)
+        val workDir = File(app.cacheDir, "dl-${System.currentTimeMillis()}")
+        try {
+            workDir.mkdirs()
+            val request = YoutubeDLRequest(item.url).apply {
+                addOption("--no-playlist")
+                addOption("-f", quality.format)
+                if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
+                if (quality.audioMp3) {
+                    addOption("--extract-audio")
+                    addOption("--audio-format", "mp3")
+                }
+                addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
+            }
+            YoutubeDL.getInstance().execute(request, item.url.hashCode().toString()) { p, _, _ ->
+                onProgress(if (p in 0f..100f) p.toInt() else -1)
+            }
+            val produced = workDir.listFiles()?.maxByOrNull { it.length() }
+                ?: error("Le téléchargement n'a produit aucun fichier.")
+            val uri = exportToDownloads(app, produced, quality.audioMp3)
+            History.add(
+                app,
+                HistoryEntry(
+                    id = System.currentTimeMillis().toString() + "-" + item.url.hashCode(),
+                    title = item.title,
+                    platform = platformOf(item.url),
+                    fileName = produced.name,
+                    uri = uri,
+                    timestamp = System.currentTimeMillis(),
+                    audio = quality.audioMp3,
+                ),
+            )
+            mainHandler.post { onHistoryChanged?.invoke() }
+        } finally {
+            workDir.deleteRecursively()
+        }
+    }
+
+    /** Copie le fichier dans Téléchargements/MKDownloader[/Audio] ; renvoie l'uri. */
+    private fun exportToDownloads(context: Context, file: File, audio: Boolean): String {
         val subDir = if (audio) "MKDownloader/Audio" else "MKDownloader"
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
@@ -100,6 +130,6 @@ object Downloads {
         context.contentResolver.openOutputStream(uri)!!.use { out ->
             file.inputStream().use { it.copyTo(out) }
         }
-        return "Téléchargements/$subDir/${file.name}" to uri.toString()
+        return uri.toString()
     }
 }

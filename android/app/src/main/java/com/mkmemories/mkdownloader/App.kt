@@ -12,7 +12,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
 
 class App : Application() {
     override fun onCreate() {
@@ -28,7 +30,7 @@ class App : Application() {
     }
 }
 
-/** Moteur yt-dlp + ffmpeg embarqué : initialisation, analyse, recherche, streaming. */
+/** Moteur yt-dlp + ffmpeg embarqué : init, analyse, recherche, chaînes, musique, streaming. */
 object Engine {
     @Volatile private var ready = false
     private val mutex = Mutex()
@@ -51,28 +53,66 @@ object Engine {
         else "yt-dlp mis à jour ✔"
     }
 
-    /** Analyse d'un lien unique (Facebook, YouTube, Instagram…). */
-    suspend fun getInfo(context: Context, url: String): VideoItem = withContext(Dispatchers.IO) {
-        ensureReady(context)
-        val info = YoutubeDL.getInstance().getInfo(YoutubeDLRequest(url).apply {
-            addOption("--no-playlist")
-        })
-        VideoItem(
-            url = url,
-            title = info.title ?: "Vidéo sans titre",
-            uploader = info.uploader,
-            durationSec = info.duration,
-            thumbnail = info.thumbnail,
+    // ---------- Helpers ----------
+
+    private fun runJson(target: String, configure: YoutubeDLRequest.() -> Unit): JSONObject {
+        val request = YoutubeDLRequest(target).apply(configure)
+        val out = YoutubeDL.getInstance().execute(request, null, null).out
+        val start = out.indexOf('{')
+        require(start >= 0) { "Réponse inattendue de yt-dlp." }
+        return JSONObject(out.substring(start))
+    }
+
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
+    private fun thumbOf(entry: JSONObject, id: String?): String? {
+        entry.optJSONArray("thumbnails")?.let { arr ->
+            if (arr.length() > 0) arr.optJSONObject(arr.length() - 1)?.optString("url")?.let { if (it.isNotEmpty()) return it }
+        }
+        entry.optStringOrNull("thumbnail")?.let { return it }
+        return if (!id.isNullOrEmpty()) "https://i.ytimg.com/vi/$id/hqdefault.jpg" else null
+    }
+
+    private fun videoFromEntry(e: JSONObject): VideoItem? {
+        val id = e.optString("id")
+        if (id.isEmpty()) return null
+        return VideoItem(
+            url = e.optStringOrNull("url") ?: "https://www.youtube.com/watch?v=$id",
+            title = e.optStringOrNull("title") ?: "Vidéo",
+            uploader = e.optStringOrNull("uploader") ?: e.optStringOrNull("channel"),
+            durationSec = e.optDouble("duration", 0.0).toInt(),
+            thumbnail = thumbOf(e, id),
+            channelName = e.optStringOrNull("channel") ?: e.optStringOrNull("uploader"),
+            channelUrl = e.optStringOrNull("channel_url") ?: e.optStringOrNull("uploader_url"),
         )
     }
 
-    /**
-     * Recherche YouTube native via yt-dlp (aucune clé API).
-     * Sans filtre de date : rapide via ytsearch.
-     * Avec filtre (semaine/mois/année) : passe par l'URL de résultats YouTube
-     * portant le jeton "sp", ce qui permet de ne remonter que les publications
-     * récentes sur un thème — le « module puissant » de veille.
-     */
+    private fun entries(root: JSONObject): List<JSONObject> {
+        val arr: JSONArray = root.optJSONArray("entries") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+    }
+
+    // ---------- Analyse d'un lien unique ----------
+
+    suspend fun getInfo(context: Context, url: String): VideoItem = withContext(Dispatchers.IO) {
+        ensureReady(context)
+        val o = runJson(url) {
+            addOption("--no-playlist"); addOption("--no-warnings"); addOption("--dump-single-json")
+        }
+        val id = o.optStringOrNull("id")
+        VideoItem(
+            url = o.optStringOrNull("webpage_url") ?: url,
+            title = o.optStringOrNull("title") ?: "Vidéo sans titre",
+            uploader = o.optStringOrNull("uploader") ?: o.optStringOrNull("channel"),
+            durationSec = o.optDouble("duration", 0.0).toInt(),
+            thumbnail = thumbOf(o, id),
+            channelName = o.optStringOrNull("channel") ?: o.optStringOrNull("uploader"),
+            channelUrl = o.optStringOrNull("channel_url") ?: o.optStringOrNull("uploader_url"),
+        )
+    }
+
+    // ---------- Recherche de vidéos ----------
+
     suspend fun search(
         context: Context,
         query: String,
@@ -83,48 +123,93 @@ object Engine {
         val target = if (dateFilter.spToken == null) {
             "ytsearch$limit:$query"
         } else {
-            val q = java.net.URLEncoder.encode(query, "UTF-8")
-            "https://www.youtube.com/results?search_query=$q&sp=${dateFilter.spToken}"
+            "https://www.youtube.com/results?search_query=${enc(query)}&sp=${dateFilter.spToken}"
         }
-        val request = YoutubeDLRequest(target).apply {
-            addOption("--dump-single-json")
-            addOption("--flat-playlist")
-            addOption("--playlist-end", limit)
-            addOption("--no-warnings")
+        val root = runJson(target) {
+            addOption("--dump-single-json"); addOption("--flat-playlist")
+            addOption("--playlist-end", limit); addOption("--no-warnings")
         }
-        val out = YoutubeDL.getInstance().execute(request, null, null).out
-        val start = out.indexOf('{')
-        if (start < 0) return@withContext emptyList()
-        val entries = JSONObject(out.substring(start)).optJSONArray("entries")
-            ?: return@withContext emptyList()
-        (0 until entries.length()).mapNotNull { i ->
-            val e = entries.optJSONObject(i) ?: return@mapNotNull null
-            val id = e.optString("id")
-            if (id.isEmpty()) return@mapNotNull null
-            VideoItem(
-                url = e.optString("url").ifEmpty { "https://www.youtube.com/watch?v=$id" },
-                title = e.optString("title").ifEmpty { "Vidéo" },
-                uploader = e.optString("uploader").ifEmpty { e.optString("channel") },
-                durationSec = e.optDouble("duration", 0.0).toInt(),
-                thumbnail = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
-            )
-        }
+        entries(root).mapNotNull(::videoFromEntry)
     }
 
+    // ---------- Recherche de chaînes ----------
+
+    /** Recherche YouTube filtrée « Chaînes » (jeton sp EgIQAg==). */
+    suspend fun searchChannels(context: Context, query: String, limit: Int = 20): List<ChannelItem> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val target = "https://www.youtube.com/results?search_query=${enc(query)}&sp=EgIQAg%3D%3D"
+            val root = runJson(target) {
+                addOption("--dump-single-json"); addOption("--flat-playlist")
+                addOption("--playlist-end", limit); addOption("--no-warnings")
+            }
+            entries(root).mapNotNull { e ->
+                val url = e.optStringOrNull("url") ?: e.optStringOrNull("channel_url") ?: return@mapNotNull null
+                if (!url.contains("/channel/") && !url.contains("/@") &&
+                    !url.contains("/user/") && !url.contains("/c/")
+                ) return@mapNotNull null
+                ChannelItem(
+                    url = url,
+                    name = e.optStringOrNull("channel") ?: e.optStringOrNull("title") ?: "Chaîne",
+                    thumbnail = thumbOf(e, null),
+                )
+            }.distinctBy { it.url }
+        }
+
+    /** Résout la chaîne d'origine d'une vidéo déjà analysée (pour l'ajouter aux favoris). */
+    fun channelFromVideo(item: VideoItem): ChannelItem? {
+        val url = item.channelUrl ?: return null
+        return ChannelItem(url = url, name = item.channelName ?: "Chaîne", thumbnail = null)
+    }
+
+    /** Vidéos récentes d'une chaîne. */
+    suspend fun channelVideos(context: Context, channelUrl: String, limit: Int = 30): List<VideoItem> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val base = channelUrl.trimEnd('/')
+            val target = if (base.endsWith("/videos")) base else "$base/videos"
+            val root = runJson(target) {
+                addOption("--dump-single-json"); addOption("--flat-playlist")
+                addOption("--playlist-end", limit); addOption("--no-warnings")
+            }
+            entries(root).mapNotNull(::videoFromEntry)
+        }
+
+    // ---------- Mode Musique ----------
+
     /**
-     * URL(s) de flux direct pour la lecture intégrée (une URL combinée, ou
-     * deux URLs vidéo+audio que le lecteur fusionne à la volée).
+     * Recherche audio : puise dans le catalogue YouTube (identique à YouTube Music).
+     * Chaque résultat est traité comme un morceau (lecture audio / MP3).
      */
-    suspend fun streamUrls(context: Context, url: String): List<String> =
+    suspend fun searchMusic(context: Context, query: String, limit: Int = 30): List<VideoItem> =
+        search(context, "$query", DateFilter.ANY, limit)
+
+    /**
+     * URL d'un flux vidéo **progressif unique** (vidéo+audio déjà muxés) pour un
+     * démarrage quasi instantané et un cast direct. On privilégie le meilleur MP4
+     * combiné (jusqu'à 720p côté YouTube) : pas de fusion à la volée = pas de latence.
+     */
+    suspend fun streamUrl(context: Context, url: String): String? =
         withContext(Dispatchers.IO) {
             ensureReady(context)
             val request = YoutubeDLRequest(url).apply {
-                addOption("--no-playlist")
-                addOption("--no-warnings")
-                addOption("-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b")
+                addOption("--no-playlist"); addOption("--no-warnings")
+                addOption("-f", "b[ext=mp4][height<=1080]/b[ext=mp4]/b[height<=720]/best")
                 addOption("-g")
             }
             YoutubeDL.getInstance().execute(request, null, null).out
-                .lineSequence().map { it.trim() }.filter { it.startsWith("http") }.toList()
+                .lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
+        }
+
+    /** URL du meilleur flux audio seul (pour l'écoute musicale en streaming). */
+    suspend fun audioStreamUrl(context: Context, url: String): String? =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val request = YoutubeDLRequest(url).apply {
+                addOption("--no-playlist"); addOption("--no-warnings")
+                addOption("-f", "bestaudio/best"); addOption("-g")
+            }
+            YoutubeDL.getInstance().execute(request, null, null).out
+                .lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
         }
 }

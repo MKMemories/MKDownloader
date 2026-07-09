@@ -32,5 +32,16 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
             android:theme="@style/Theme.MKDownloader" />
+
+        <activity
+            android:name=".MusicPlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:theme="@style/Theme.MKDownloader" />
+
+        <!-- Fournit les options Cast (récepteur média par défaut). -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.mkmemories.mkdownloader.CastOptionsProvider" />
     </application>
 </manifest>

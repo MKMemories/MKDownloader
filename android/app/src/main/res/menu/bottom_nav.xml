@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_search"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="@string/tab_search" />
+    <item
+        android:id="@+id/nav_music"
+        android:icon="@android:drawable/ic_media_play"
+        android:title="@string/tab_music" />
+    <item
+        android:id="@+id/nav_favorites"
+        android:icon="@android:drawable/btn_star_big_on"
+        android:title="@string/tab_favorites" />
+    <item
+        android:id="@+id/nav_history"
+        android:icon="@android:drawable/ic_menu_recent_history"
+        android:title="@string/tab_history" />
+</menu>

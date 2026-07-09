@@ -9,16 +9,23 @@
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        app:animation_enabled="true"
+        app:hide_on_touch="true"
         app:resize_mode="fit"
-        app:show_buffering="when_playing" />
+        app:show_buffering="always"
+        app:use_controller="true" />
 
+    <!-- Barre supérieure premium (fondu au tap, comme les contrôles) -->
     <LinearLayout
+        android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#66000000"
+        android:background="@drawable/scrim_top"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="8dp">
+        android:paddingHorizontal="8dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="18dp">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/closeButton"
@@ -27,7 +34,7 @@
             android:layout_height="wrap_content"
             android:contentDescription="@string/close"
             app:icon="@android:drawable/ic_menu_close_clear_cancel"
-            app:iconTint="@color/text" />
+            app:iconTint="#FFFFFF" />
 
         <TextView
             android:id="@+id/playerTitle"
@@ -36,9 +43,16 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@color/text"
-            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
             android:textStyle="bold" />
+
+        <androidx.mediarouter.app.MediaRouteButton
+            android:id="@+id/castButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/downloadFromPlayer"
@@ -47,7 +61,7 @@
             android:layout_height="wrap_content"
             android:contentDescription="@string/download"
             app:icon="@android:drawable/stat_sys_download_done"
-            app:iconTint="@color/text" />
+            app:iconTint="#FFFFFF" />
     </LinearLayout>
 
     <ProgressBar
@@ -55,5 +69,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:indeterminateTint="#FFFFFF"
         android:visibility="gone" />
 </FrameLayout>

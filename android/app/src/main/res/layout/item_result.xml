@@ -16,8 +16,8 @@
 
         <ImageView
             android:id="@+id/resultThumb"
-            android:layout_width="120dp"
-            android:layout_height="68dp"
+            android:layout_width="110dp"
+            android:layout_height="62dp"
             android:background="@color/bg"
             android:contentDescription="@string/thumb_desc"
             android:scaleType="centerCrop" />
@@ -57,14 +57,16 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/playButton"
-                    style="@style/Widget.Material3.Button.IconButton.Filled.Tonal"
+                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="6dp"
-                    android:contentDescription="@string/play"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:icon="@android:drawable/ic_media_play" />
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:text="@string/play"
+                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/downloadButton"
@@ -82,13 +84,37 @@
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minWidth="0dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    android:paddingHorizontal="12dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="10dp"
                     android:text="@string/mp3"
                     android:textSize="12sp" />
             </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/favButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/favorite"
+                app:icon="@android:drawable/btn_star_big_off"
+                app:iconTint="@color/accent2" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/moreButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/more"
+                app:icon="@android:drawable/ic_menu_more"
+                app:iconTint="@color/text_dim" />
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
