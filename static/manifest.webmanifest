@@ -1,0 +1,17 @@
+{
+  "name": "MKDownloader",
+  "short_name": "MKDownloader",
+  "description": "Regardez et téléchargez vos vidéos en qualité maximale — YouTube, Facebook, Instagram et 1000+ sites.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0E1A",
+  "theme_color": "#0A0E1A",
+  "lang": "fr",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }
+  ]
+}

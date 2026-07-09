@@ -5,6 +5,7 @@ exige Rust), donc l'application s'installe partout — y compris sur un
 téléphone Android via Termux.
 """
 
+import mimetypes
 import os
 
 from starlette.applications import Starlette
@@ -19,6 +20,11 @@ from .downloader import QUALITY_PRESETS, _clean_error, manager, probe
 # (en-tête X-App-Key ou paramètre ?key=). Indispensable avant d'exposer
 # l'application sur Internet.
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+
+# Types MIME corrects pour la PWA (installable sur iPhone via « Ajouter à
+# l'écran d'accueil ») et le service worker.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+mimetypes.add_type("text/javascript", ".js")
 
 
 def _authorized(request) -> bool:
@@ -55,7 +61,11 @@ async def qualities(request) -> JSONResponse:
     if not _authorized(request):
         return _deny()
     return JSONResponse(
-        [{"id": key, "label": preset["label"]} for key, preset in QUALITY_PRESETS.items()]
+        [
+            {"id": key, "label": preset["label"]}
+            for key, preset in QUALITY_PRESETS.items()
+            if not preset.get("hidden")
+        ]
     )
 
 
@@ -112,6 +122,11 @@ async def job_file(request):
         return JSONResponse({"detail": "Fichier indisponible"}, status_code=404)
     if not os.path.exists(job.filepath):
         return JSONResponse({"detail": "Fichier expiré (purgé)"}, status_code=410)
+    # ?inline=1 : lecture dans le navigateur (bon type MIME + disposition inline,
+    # FileResponse gère les requêtes Range → seek vidéo sur iPhone/Safari).
+    if request.query_params.get("inline") == "1":
+        media = mimetypes.guess_type(job.filename or "")[0] or "application/octet-stream"
+        return FileResponse(job.filepath, media_type=media, content_disposition_type="inline")
     return FileResponse(
         job.filepath,
         filename=job.filename or "video",

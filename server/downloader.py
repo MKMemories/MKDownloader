@@ -61,6 +61,19 @@ QUALITY_PRESETS: dict[str, dict[str, Any]] = {
         "format": "bestaudio/best",
         "audio_only": True,
     },
+    # Preset interne pour la LECTURE dans le navigateur (iPhone/Safari inclus) :
+    # impose H.264 + AAC en MP4, seuls formats lus nativement partout. Masqué
+    # de la grille de qualité (usage interne du bouton « Lire »).
+    "stream": {
+        "label": "Lecture navigateur",
+        "format": (
+            "best[ext=mp4][vcodec^=avc1][acodec^=mp4a][height<=1080]"
+            "/bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+            "/best[ext=mp4]/best"
+        ),
+        "merge": "mp4",
+        "hidden": True,
+    },
 }
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")

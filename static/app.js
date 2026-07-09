@@ -101,6 +101,12 @@ function resetDownloadUi() {
   $("save-btn").hidden = true;
   $("done-hint").hidden = true;
   $("download-btn").hidden = false;
+  $("play-btn").hidden = false;
+  const player = $("player");
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+  player.hidden = true;
   $("progress-fill").style.width = "0%";
   $("progress-fill").classList.remove("indeterminate");
 }
@@ -154,8 +160,9 @@ $("download-btn").addEventListener("click", async () => {
       body: JSON.stringify({ url: state.videoUrl, quality: state.quality }),
     });
     btn.hidden = true;
+    $("play-btn").hidden = true;
     $("progress-block").hidden = false;
-    trackJob(job.id);
+    trackJob(job.id, "download");
   } catch (err) {
     showError(err.message);
   } finally {
@@ -163,7 +170,30 @@ $("download-btn").addEventListener("click", async () => {
   }
 });
 
-function trackJob(jobId) {
+/* ---------- Lecture dans le navigateur ---------- */
+
+$("play-btn").addEventListener("click", async () => {
+  showError("");
+  resetDownloadUi();
+  const btn = $("play-btn");
+  setBusy(btn, true, "Préparation…");
+  try {
+    const job = await api("/api/download", {
+      method: "POST",
+      body: JSON.stringify({ url: state.videoUrl, quality: "stream" }),
+    });
+    btn.hidden = true;
+    $("download-btn").hidden = true;
+    $("progress-block").hidden = false;
+    trackJob(job.id, "play");
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    setBusy(btn, false);
+  }
+});
+
+function trackJob(jobId, mode) {
   const fill = $("progress-fill");
   const statusEl = $("progress-status");
   const detailEl = $("progress-detail");
@@ -198,12 +228,22 @@ function trackJob(jobId) {
       fill.style.width = "100%";
       statusEl.textContent = "Terminé ✔";
       detailEl.textContent = job.filesize || "";
-      const save = $("save-btn");
-      const key = state.key ? `?key=${encodeURIComponent(state.key)}` : "";
-      save.href = `/api/jobs/${jobId}/file${key}`;
-      save.setAttribute("download", job.filename || "video");
-      save.hidden = false;
-      $("done-hint").hidden = false;
+      if (mode === "play") {
+        const keyQ = state.key ? `&key=${encodeURIComponent(state.key)}` : "";
+        const player = $("player");
+        player.src = `/api/jobs/${jobId}/file?inline=1${keyQ}`;
+        player.hidden = false;
+        $("progress-block").hidden = true;
+        player.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        player.play().catch(() => {});
+      } else {
+        const save = $("save-btn");
+        const key = state.key ? `?key=${encodeURIComponent(state.key)}` : "";
+        save.href = `/api/jobs/${jobId}/file${key}`;
+        save.setAttribute("download", job.filename || "video");
+        save.hidden = false;
+        $("done-hint").hidden = false;
+      }
     } else if (job.status === "error") {
       clearInterval(state.pollTimer);
       showError(job.error || "Le téléchargement a échoué.");
@@ -226,3 +266,11 @@ $("paste-btn").addEventListener("click", async () => {
     $("url-input").focus();
   }
 });
+
+/* ---------- PWA : enregistrement du service worker ---------- */
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

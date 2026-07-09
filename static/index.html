@@ -2,12 +2,20 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MKDownloader — Téléchargeur vidéo HD/4K</title>
-  <meta name="description" content="Téléchargez vos vidéos Facebook, YouTube et Instagram en qualité maximale.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>MKDownloader — Regarder &amp; télécharger en HD/4K</title>
+  <meta name="description" content="Regardez et téléchargez vos vidéos Facebook, YouTube et Instagram en qualité maximale.">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="stylesheet" href="style.css">
+
+  <!-- PWA : installable sur iPhone via « Partager → Ajouter à l'écran d'accueil » -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0A0E1A">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MKDownloader">
 </head>
 <body>
   <div class="bg-glow" aria-hidden="true"></div>
@@ -52,6 +60,13 @@
           <p class="sub" id="video-sub"></p>
         </div>
       </div>
+
+      <video id="player" controls playsinline preload="none" hidden
+             style="width:100%;border-radius:16px;margin-bottom:14px;background:#000"></video>
+
+      <button class="primary-btn big" id="play-btn">
+        <span class="btn-label">▶ Regarder dans le navigateur</span>
+      </button>
 
       <div class="quality-block">
         <p class="label">Qualité</p>
