@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import socket
+import tempfile
 import threading
 import time
 import uuid
@@ -17,6 +18,13 @@ import yt_dlp
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.join(_PROJECT_ROOT, "data"))
 COOKIES_FILE = os.environ.get("COOKIES_FILE", os.path.join(_PROJECT_ROOT, "cookies.txt"))
+# COOKIES_CONTENT permet de fournir les cookies via un secret d'environnement
+# (pratique sur Hugging Face/Render, où monter un fichier est compliqué).
+if os.environ.get("COOKIES_CONTENT") and not os.path.exists(COOKIES_FILE):
+    COOKIES_FILE = os.path.join(tempfile.gettempdir(), "mkdl-cookies.txt")
+    with open(COOKIES_FILE, "w", encoding="utf-8") as _fh:
+        _fh.write(os.environ["COOKIES_CONTENT"])
+    os.chmod(COOKIES_FILE, 0o600)
 # Durée de conservation des fichiers téléchargés avant purge automatique.
 RETENTION_MINUTES = int(os.environ.get("RETENTION_MINUTES", "180"))
 MAX_CONCURRENT_JOBS = int(os.environ.get("MAX_CONCURRENT_JOBS", "3"))
