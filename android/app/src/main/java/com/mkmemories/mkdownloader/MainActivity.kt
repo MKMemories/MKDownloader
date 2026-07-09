@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
     private var sourceFilter: String = "Tout"
+    private var lastQuery: String = ""
     private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,7 +79,14 @@ class MainActivity : AppCompatActivity() {
         ui.favoritesPane.isVisible = itemId == R.id.nav_favorites
         ui.historyPane.isVisible = itemId == R.id.nav_history
         when (itemId) {
-            R.id.nav_music -> refreshPlaylists()
+            R.id.nav_music -> {
+                refreshPlaylists()
+                // Report de la recherche : bascule sans retaper la même requête.
+                if (ui.musicInput.text.isNullOrBlank() && lastQuery.isNotBlank()) {
+                    ui.musicInput.setText(lastQuery)
+                    musicSearch()
+                }
+            }
             R.id.nav_favorites -> refreshFavorites()
             R.id.nav_history -> refreshHistory()
         }
@@ -90,9 +98,7 @@ class MainActivity : AppCompatActivity() {
         results = VideoAdapter(
             isFav = { Favorites.isVideoFav(this, it.url) },
             onPlay = ::openPlayer,
-            onMp3 = { downloadMp3(it) },
             onToggleFav = { Favorites.toggleVideo(this, it) },
-            onDownload = ::askQualityAndDownload,
             onMore = ::showVideoMenu,
         )
         ui.results.layoutManager = LinearLayoutManager(this)
@@ -101,10 +107,8 @@ class MainActivity : AppCompatActivity() {
         musicResults = VideoAdapter(
             isFav = { Favorites.isVideoFav(this, it.url) },
             onPlay = { openMusic(listOf(it), 0) },
-            onMp3 = { downloadMp3(it) },
             onToggleFav = { Favorites.toggleVideo(this, it) },
             onMore = ::showTrackMenu,
-            playLabel = getString(R.string.listen),
         )
         ui.musicResults.layoutManager = LinearLayoutManager(this)
         ui.musicResults.adapter = musicResults
@@ -112,9 +116,7 @@ class MainActivity : AppCompatActivity() {
         favVideos = VideoAdapter(
             isFav = { Favorites.isVideoFav(this, it.url) },
             onPlay = ::openPlayer,
-            onMp3 = { downloadMp3(it) },
             onToggleFav = { Favorites.toggleVideo(this, it); refreshFavorites() },
-            onDownload = ::askQualityAndDownload,
             onMore = ::showVideoMenu,
         )
         ui.favVideosList.layoutManager = LinearLayoutManager(this)
@@ -236,6 +238,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun searchVideos(query: String) {
+        lastQuery = query
         val status = if (dateFilter == DateFilter.ANY) R.string.searching else R.string.searching_recent
         setBusy(true, status)
         ui.videoCard.isVisible = false
@@ -254,18 +257,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Menu ⋮ d'une vidéo : chaîne + playlist. */
+    /** Menu ⋮ d'une vidéo : lecture, téléchargements, playlist, chaîne. */
     private fun showVideoMenu(item: VideoItem, anchor: View) {
         PopupMenu(this, anchor).apply {
+            menu.add(R.string.menu_play).setOnMenuItemClickListener { openPlayer(item); true }
+            menu.add(R.string.menu_listen).setOnMenuItemClickListener { openMusic(listOf(item), 0); true }
+            menu.add(R.string.menu_download_video).setOnMenuItemClickListener { askQualityAndDownload(item); true }
+            menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
+            menu.add(R.string.add_to_playlist).setOnMenuItemClickListener { choosePlaylist(item); true }
             menu.add(R.string.view_channel).setOnMenuItemClickListener { openChannelFromVideo(item); true }
             menu.add(R.string.add_channel_fav).setOnMenuItemClickListener { addChannelFav(item); true }
-            menu.add(R.string.add_to_playlist).setOnMenuItemClickListener { choosePlaylist(item); true }
             show()
         }
     }
 
     private fun showTrackMenu(item: VideoItem, anchor: View) {
         PopupMenu(this, anchor).apply {
+            menu.add(R.string.menu_listen).setOnMenuItemClickListener { openMusic(listOf(item), 0); true }
+            menu.add(R.string.menu_play).setOnMenuItemClickListener { openPlayer(item); true }
+            menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
             menu.add(R.string.add_to_playlist).setOnMenuItemClickListener { choosePlaylist(item); true }
             menu.add(R.string.view_channel).setOnMenuItemClickListener { openChannelFromVideo(item); true }
             show()
@@ -326,6 +336,7 @@ class MainActivity : AppCompatActivity() {
     private fun musicSearch() {
         val q = ui.musicInput.text?.toString().orEmpty().trim()
         if (q.isEmpty() || busy) return
+        lastQuery = q
         busy = true
         ui.musicProgress.isVisible = true
         lifecycleScope.launch {

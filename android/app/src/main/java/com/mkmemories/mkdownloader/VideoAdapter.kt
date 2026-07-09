@@ -8,15 +8,12 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.mkmemories.mkdownloader.databinding.ItemResultBinding
 
-/** Liste de vidéos/morceaux, boutons d'action configurables selon le contexte. */
+/** Liste de vidéos/morceaux : tap = lecture, ★ = favori, ⋮ = toutes les actions. */
 class VideoAdapter(
     private val isFav: (VideoItem) -> Boolean,
     private val onPlay: (VideoItem) -> Unit,
-    private val onMp3: (VideoItem) -> Unit,
     private val onToggleFav: (VideoItem) -> Unit,
-    private val onDownload: ((VideoItem) -> Unit)? = null,
-    private val onMore: ((VideoItem, View) -> Unit)? = null,
-    private val playLabel: String? = null,
+    private val onMore: (VideoItem, View) -> Unit,
 ) : RecyclerView.Adapter<VideoAdapter.Holder>() {
 
     private val items = mutableListOf<VideoItem>()
@@ -44,25 +41,12 @@ class VideoAdapter(
             resultMeta.isVisible = meta.isNotEmpty()
             if (!item.thumbnail.isNullOrEmpty()) resultThumb.load(item.thumbnail)
 
-            playLabel?.let { playButton.text = it }
-            playButton.setOnClickListener { onPlay(item) }
-
-            downloadButton.isVisible = onDownload != null
-            downloadButton.setOnClickListener { onDownload?.invoke(item) }
-            mp3Button.setOnClickListener { onMp3(item) }
-
             favButton.setIconResource(
                 if (isFav(item)) android.R.drawable.btn_star_big_on
                 else android.R.drawable.btn_star_big_off
             )
-            favButton.setOnClickListener {
-                onToggleFav(item)
-                notifyItemChanged(position)
-            }
-
-            moreButton.isVisible = onMore != null
-            moreButton.setOnClickListener { onMore?.invoke(item, it) }
-
+            favButton.setOnClickListener { onToggleFav(item); notifyItemChanged(position) }
+            moreButton.setOnClickListener { onMore(item, it) }
             root.setOnClickListener { onPlay(item) }
         }
     }

@@ -120,6 +120,16 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         exo = ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            // Gestion du focus audio : démarrer cette lecture met en pause toute
+            // autre lecture en cours (musique en arrière-plan, autre vidéo…).
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            .setHandleAudioBecomingNoisy(true)
             .build()
     }
 

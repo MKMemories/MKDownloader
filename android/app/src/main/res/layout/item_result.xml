@@ -3,29 +3,45 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="10dp"
+    android:layout_marginBottom="8dp"
     app:cardBackgroundColor="@color/card"
-    app:cardCornerRadius="16dp">
+    app:cardCornerRadius="14dp"
+    app:cardElevation="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:padding="8dp">
 
-        <ImageView
-            android:id="@+id/resultThumb"
-            android:layout_width="110dp"
-            android:layout_height="62dp"
-            android:background="@color/bg"
-            android:contentDescription="@string/thumb_desc"
-            android:scaleType="centerCrop" />
+        <FrameLayout
+            android:layout_width="104dp"
+            android:layout_height="58dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/resultThumb"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/bg"
+                android:contentDescription="@string/thumb_desc"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ThumbRounded" />
+
+            <ImageView
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_gravity="center"
+                android:alpha="0.92"
+                android:contentDescription="@string/play"
+                android:src="@android:drawable/ic_media_play"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -37,84 +53,42 @@
                 android:maxLines="2"
                 android:textColor="@color/text"
                 android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:lineSpacingMultiplier="1.05" />
 
             <TextView
                 android:id="@+id/resultMeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="3dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/text_dim"
                 android:textSize="12sp" />
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/playButton"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:paddingHorizontal="12dp"
-                    android:text="@string/play"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/downloadButton"
-                    style="@style/Widget.Material3.Button.IconButton.Filled"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:contentDescription="@string/download"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    app:icon="@android:drawable/stat_sys_download_done" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/mp3Button"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:paddingHorizontal="10dp"
-                    android:text="@string/mp3"
-                    android:textSize="12sp" />
-            </LinearLayout>
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/favButton"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:contentDescription="@string/favorite"
+            app:icon="@android:drawable/btn_star_big_off"
+            app:iconSize="20dp"
+            app:iconTint="@color/accent2" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/favButton"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/favorite"
-                app:icon="@android:drawable/btn_star_big_off"
-                app:iconTint="@color/accent2" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/moreButton"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/more"
-                app:icon="@android:drawable/ic_menu_more"
-                app:iconTint="@color/text_dim" />
-        </LinearLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/moreButton"
+            style="@style/Widget.Material3.Button.IconButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:contentDescription="@string/more"
+            app:icon="@android:drawable/ic_menu_more"
+            app:iconSize="20dp"
+            app:iconTint="@color/text_dim" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

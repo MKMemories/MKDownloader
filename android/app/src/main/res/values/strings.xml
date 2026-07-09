@@ -36,6 +36,10 @@
     <string name="view_channel">Chaîne ▸</string>
     <string name="add_channel_fav">Ajouter la chaîne aux favoris</string>
     <string name="add_to_playlist">Ajouter à une playlist</string>
+    <string name="menu_play">▶ Lire la vidéo</string>
+    <string name="menu_listen">♪ Écouter (audio)</string>
+    <string name="menu_download_video">⬇ Télécharger la vidéo</string>
+    <string name="menu_download_mp3">♪ Télécharger en MP3</string>
     <string name="no_channel">Chaîne introuvable pour cette vidéo.</string>
     <string name="channel_added">Chaîne ajoutée aux favoris ✔</string>
     <string name="channel_removed">Chaîne retirée des favoris</string>
