@@ -10,6 +10,7 @@ import com.mkmemories.mkdownloader.databinding.ItemResultBinding
 class ResultsAdapter(
     private val onPlay: (VideoItem) -> Unit,
     private val onDownload: (VideoItem) -> Unit,
+    private val onMp3: (VideoItem) -> Unit,
 ) : RecyclerView.Adapter<ResultsAdapter.Holder>() {
 
     private val items = mutableListOf<VideoItem>()
@@ -40,6 +41,7 @@ class ResultsAdapter(
             if (!item.thumbnail.isNullOrEmpty()) resultThumb.load(item.thumbnail)
             playButton.setOnClickListener { onPlay(item) }
             downloadButton.setOnClickListener { onDownload(item) }
+            mp3Button.setOnClickListener { onMp3(item) }
             root.setOnClickListener { onPlay(item) }
         }
     }

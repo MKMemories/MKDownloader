@@ -28,6 +28,31 @@ val QUALITIES = listOf(
     Quality("audio", "Audio MP3", "bestaudio/best", mergeMp4 = false, audioMp3 = true),
 )
 
+val AUDIO_QUALITY = QUALITIES.first { it.audioMp3 }
+
+/** Filtres de date pour la recherche YouTube (jetons "sp" de l'URL de résultats). */
+enum class DateFilter(val label: String, val spToken: String?) {
+    ANY("Toutes dates", null),
+    WEEK("Cette semaine", "EgIIAw%3D%3D"),
+    MONTH("Ce mois-ci", "EgIIBA%3D%3D"),
+    YEAR("Cette année", "EgIIBQ%3D%3D"),
+}
+
+/** Détecte la plateforme d'origine à partir de l'URL, pour l'organisation par source. */
+fun platformOf(url: String): String {
+    val u = url.lowercase()
+    return when {
+        "youtube.com" in u || "youtu.be" in u -> "YouTube"
+        "facebook.com" in u || "fb.watch" in u || "fb.com" in u -> "Facebook"
+        "instagram.com" in u || "instagr.am" in u -> "Instagram"
+        "tiktok.com" in u -> "TikTok"
+        "twitter.com" in u || "x.com" in u -> "X"
+        "vimeo.com" in u -> "Vimeo"
+        "dailymotion.com" in u -> "Dailymotion"
+        else -> "Autre"
+    }
+}
+
 fun formatDuration(seconds: Int): String {
     if (seconds <= 0) return ""
     val h = seconds / 3600

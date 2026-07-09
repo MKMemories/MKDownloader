@@ -48,22 +48,47 @@
                 android:maxLines="1"
                 android:textColor="@color/text_dim"
                 android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/playButton"
+                    style="@style/Widget.Material3.Button.IconButton.Filled.Tonal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:contentDescription="@string/play"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:icon="@android:drawable/ic_media_play" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/downloadButton"
+                    style="@style/Widget.Material3.Button.IconButton.Filled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:contentDescription="@string/download"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:icon="@android:drawable/stat_sys_download_done" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/mp3Button"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:text="@string/mp3"
+                    android:textSize="12sp" />
+            </LinearLayout>
         </LinearLayout>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/playButton"
-            style="@style/Widget.Material3.Button.IconButton.Filled.Tonal"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="@string/play"
-            app:icon="@android:drawable/ic_media_play" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/downloadButton"
-            style="@style/Widget.Material3.Button.IconButton.Filled"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="@string/download"
-            app:icon="@android:drawable/stat_sys_download_done" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

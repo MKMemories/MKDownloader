@@ -66,33 +66,50 @@ object Engine {
         )
     }
 
-    /** Recherche YouTube native via yt-dlp (aucune clé API nécessaire). */
-    suspend fun search(context: Context, query: String, limit: Int = 20): List<VideoItem> =
-        withContext(Dispatchers.IO) {
-            ensureReady(context)
-            val request = YoutubeDLRequest("ytsearch$limit:$query").apply {
-                addOption("--dump-single-json")
-                addOption("--flat-playlist")
-                addOption("--no-warnings")
-            }
-            val out = YoutubeDL.getInstance().execute(request, null, null).out
-            val start = out.indexOf('{')
-            if (start < 0) return@withContext emptyList()
-            val entries = JSONObject(out.substring(start)).optJSONArray("entries")
-                ?: return@withContext emptyList()
-            (0 until entries.length()).mapNotNull { i ->
-                val e = entries.optJSONObject(i) ?: return@mapNotNull null
-                val id = e.optString("id")
-                if (id.isEmpty()) return@mapNotNull null
-                VideoItem(
-                    url = e.optString("url").ifEmpty { "https://www.youtube.com/watch?v=$id" },
-                    title = e.optString("title").ifEmpty { "Vidéo" },
-                    uploader = e.optString("uploader").ifEmpty { e.optString("channel") },
-                    durationSec = e.optDouble("duration", 0.0).toInt(),
-                    thumbnail = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
-                )
-            }
+    /**
+     * Recherche YouTube native via yt-dlp (aucune clé API).
+     * Sans filtre de date : rapide via ytsearch.
+     * Avec filtre (semaine/mois/année) : passe par l'URL de résultats YouTube
+     * portant le jeton "sp", ce qui permet de ne remonter que les publications
+     * récentes sur un thème — le « module puissant » de veille.
+     */
+    suspend fun search(
+        context: Context,
+        query: String,
+        dateFilter: DateFilter = DateFilter.ANY,
+        limit: Int = 30,
+    ): List<VideoItem> = withContext(Dispatchers.IO) {
+        ensureReady(context)
+        val target = if (dateFilter.spToken == null) {
+            "ytsearch$limit:$query"
+        } else {
+            val q = java.net.URLEncoder.encode(query, "UTF-8")
+            "https://www.youtube.com/results?search_query=$q&sp=${dateFilter.spToken}"
         }
+        val request = YoutubeDLRequest(target).apply {
+            addOption("--dump-single-json")
+            addOption("--flat-playlist")
+            addOption("--playlist-end", limit)
+            addOption("--no-warnings")
+        }
+        val out = YoutubeDL.getInstance().execute(request, null, null).out
+        val start = out.indexOf('{')
+        if (start < 0) return@withContext emptyList()
+        val entries = JSONObject(out.substring(start)).optJSONArray("entries")
+            ?: return@withContext emptyList()
+        (0 until entries.length()).mapNotNull { i ->
+            val e = entries.optJSONObject(i) ?: return@mapNotNull null
+            val id = e.optString("id")
+            if (id.isEmpty()) return@mapNotNull null
+            VideoItem(
+                url = e.optString("url").ifEmpty { "https://www.youtube.com/watch?v=$id" },
+                title = e.optString("title").ifEmpty { "Vidéo" },
+                uploader = e.optString("uploader").ifEmpty { e.optString("channel") },
+                durationSec = e.optDouble("duration", 0.0).toInt(),
+                thumbnail = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
+            )
+        }
+    }
 
     /**
      * URL(s) de flux direct pour la lecture intégrée (une URL combinée, ou

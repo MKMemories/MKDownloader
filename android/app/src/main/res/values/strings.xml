@@ -1,22 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MKDownloader</string>
-    <string name="tagline_v2">Regardez, cherchez, téléchargez — YouTube · Facebook · Instagram</string>
     <string name="search_hint">Recherche YouTube ou lien vidéo…</string>
     <string name="go">Rechercher</string>
     <string name="paste">📋 Coller</string>
     <string name="play">▶ Lire</string>
-    <string name="download">⬇ Télécharger</string>
+    <string name="download">⬇ Vidéo</string>
+    <string name="mp3">♪ MP3</string>
+    <string name="open">Ouvrir</string>
+    <string name="delete">Supprimer</string>
+    <string name="cancel">Annuler</string>
     <string name="close">Fermer</string>
+
+    <string name="tab_search">Rechercher</string>
+    <string name="tab_history">Historique</string>
+
     <string name="analyzing">Analyse du lien…</string>
     <string name="searching">Recherche YouTube…</string>
+    <string name="searching_recent">Recherche des publications récentes…</string>
     <string name="no_results">Aucun résultat.</string>
+
     <string name="choose_quality">Qualité du téléchargement</string>
-    <string name="download_started">Téléchargement lancé — suivez la progression sur l\'écran principal.</string>
+    <string name="download_started">Téléchargement lancé — suivez la progression sur l\'onglet Rechercher.</string>
     <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>
     <string name="downloading">Téléchargement… %1$d%%</string>
     <string name="processing">Préparation / fusion en cours…</string>
+
     <string name="update_engine">Mettre à jour yt-dlp</string>
     <string name="updating">Mise à jour de yt-dlp…</string>
     <string name="thumb_desc">Miniature de la vidéo</string>
+
+    <string name="history_empty">Aucun téléchargement pour le moment.\nVos vidéos et MP3 apparaîtront ici.</string>
+    <string name="clear_all">Tout effacer</string>
+    <string name="cannot_open">Impossible d\'ouvrir ce fichier (peut-être supprimé).</string>
+    <string name="delete_one_title">Supprimer ce fichier ?</string>
+    <string name="delete_one_message">« %1$s » sera retiré de l\'historique et supprimé de vos téléchargements.</string>
+    <string name="clear_all_title">Effacer l\'historique</string>
+    <string name="clear_all_message">Voulez-vous seulement vider la liste, ou aussi supprimer les fichiers téléchargés ?</string>
+    <string name="clear_list_only">Vider la liste</string>
+    <string name="clear_and_files">Liste + fichiers</string>
 </resources>

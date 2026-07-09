@@ -2,6 +2,7 @@ package com.mkmemories.mkdownloader
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -28,6 +29,8 @@ object Downloads {
     @Volatile var state: State = State()
         private set
     var onChange: ((State) -> Unit)? = null
+    /** Notifie l'écran Historique qu'une entrée a été ajoutée. */
+    var onHistoryChanged: (() -> Unit)? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -61,7 +64,20 @@ object Downloads {
                 }
                 val produced = workDir.listFiles()?.maxByOrNull { it.length() }
                     ?: error("Le téléchargement n'a produit aucun fichier.")
-                val savedName = exportToDownloads(appContext, produced)
+                val (savedName, uri) = exportToDownloads(appContext, produced, quality.audioMp3)
+                History.add(
+                    appContext,
+                    HistoryEntry(
+                        id = System.currentTimeMillis().toString(),
+                        title = item.title,
+                        platform = platformOf(item.url),
+                        fileName = produced.name,
+                        uri = uri,
+                        timestamp = System.currentTimeMillis(),
+                        audio = quality.audioMp3,
+                    ),
+                )
+                mainHandler.post { onHistoryChanged?.invoke() }
                 update(State(running = false, label = item.title, percent = 100, message = "Enregistré dans $savedName"))
             } catch (e: Exception) {
                 update(State(running = false, label = item.title, error = cleanError(e)))
@@ -72,17 +88,18 @@ object Downloads {
         return true
     }
 
-    /** Copie le fichier produit dans Téléchargements/MKDownloader (visible partout). */
-    private fun exportToDownloads(context: Context, file: File): String {
+    /** Copie le fichier dans Téléchargements/MKDownloader ; renvoie (chemin lisible, uri). */
+    private fun exportToDownloads(context: Context, file: File, audio: Boolean): Pair<String, String> {
+        val subDir = if (audio) "MKDownloader/Audio" else "MKDownloader"
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/MKDownloader")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + subDir)
         }
-        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        val uri: Uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             ?: error("Impossible d'écrire dans Téléchargements")
         context.contentResolver.openOutputStream(uri)!!.use { out ->
             file.inputStream().use { it.copyTo(out) }
         }
-        return "Téléchargements/MKDownloader/${file.name}"
+        return "Téléchargements/$subDir/${file.name}" to uri.toString()
     }
 }
