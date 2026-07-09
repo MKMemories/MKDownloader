@@ -1,0 +1,16 @@
+# Déploiement en un clic sur Render (offre gratuite) :
+# https://dashboard.render.com/ → New → Blueprint → ce repo
+services:
+  - type: web
+    name: mkdownloader
+    runtime: docker
+    plan: free
+    envVars:
+      - key: APP_PASSWORD
+        sync: false # Render vous demandera la valeur au moment du déploiement
+      - key: YTDLP_AUTO_UPDATE
+        value: "1"
+      - key: RETENTION_MINUTES
+        value: "120"
+      - key: MAX_CONCURRENT_JOBS
+        value: "2"

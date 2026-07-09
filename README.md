@@ -58,14 +58,31 @@ Instagram exige presque toujours une session connectée, et Facebook la demande 
 
 ## Exposer l'instance sur Internet
 
+> ⚠️ **Vercel et Netlify ne fonctionnent pas** : ces plateformes serverless n'ont ni ffmpeg, ni exécution longue, ni stockage de fichiers. Il faut un hébergeur qui exécute un conteneur Docker persistant.
+
+### Option gratuite : Render (déploiement en un clic)
+
+1. Créez un compte sur [render.com](https://render.com) (connexion GitHub).
+2. **New → Blueprint** → sélectionnez ce repo : le fichier `render.yaml` configure tout.
+3. Render demande la valeur d'`APP_PASSWORD` : choisissez un mot de passe fort.
+4. Votre instance est en ligne sur `https://mkdownloader-xxxx.onrender.com`.
+
+Limites de l'offre gratuite : l'instance s'endort après 15 min d'inactivité (premier chargement lent, ~1 min), 512 Mo de RAM (suffisant pour du 1080p ; le 4K long peut échouer). Alternative gratuite « toujours allumée » : un VPS **Oracle Cloud Always Free**, ou un Raspberry Pi chez vous derrière un tunnel Cloudflare.
+
+### Option robuste : VPS (~5 €/mois)
+
 1. **Définissez `APP_PASSWORD`** — sinon n'importe qui peut utiliser votre serveur et votre bande passante.
-2. Placez l'application derrière un reverse proxy HTTPS (Caddy, Nginx + Let's Encrypt, Traefik…). Exemple Caddy :
+2. `docker compose up -d --build`, puis placez l'application derrière un reverse proxy HTTPS (Caddy, Nginx + Let's Encrypt, Traefik…). Exemple Caddy :
    ```
    videos.mondomaine.fr {
        reverse_proxy localhost:8000
    }
    ```
-3. Hébergement : n'importe quel VPS à ~5 €/mois (Hetzner, OVH, Scaleway…) suffit largement. Évitez les plateformes serverless (Vercel, Netlify) : les téléchargements longs et ffmpeg y sont incompatibles. Railway/Render/Fly.io fonctionnent avec le Dockerfile fourni.
+3. N'importe quel VPS (Hetzner, OVH, Scaleway…) suffit largement.
+
+### Note sur les IP de datacenter
+
+Depuis un hébergeur cloud, YouTube (et parfois Instagram) peut afficher « Sign in to confirm you're not a bot » : c'est un blocage des IP de datacenter, pas un bug. Solution : fournir un `cookies.txt` (voir ci-dessus) — ou héberger chez vous, où votre IP résidentielle n'est pas filtrée.
 
 ## Maintenance
 
