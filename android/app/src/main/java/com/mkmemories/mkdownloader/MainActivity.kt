@@ -19,8 +19,13 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.mkmemories.mkdownloader.databinding.ActivityMainBinding
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val BLAST_URL = "https://www.youtube.com/@Blast_Info"
+private const val BLAST_QUERY = "Blast Le souffle de l'info"
 
 class MainActivity : AppCompatActivity() {
 
@@ -105,6 +110,48 @@ class MainActivity : AppCompatActivity() {
         ui.bottomNav.selectedItemId = R.id.nav_search
 
         handleShareIntent(intent)
+        if (intent?.action != Intent.ACTION_SEND) loadHomeFeed()
+    }
+
+    /** Fil d'accueil : dernières vidéos des chaînes favorites (ou Blast par défaut). */
+    private fun loadHomeFeed() {
+        val favs = Favorites.channels(this)
+        ui.videoCard.isVisible = false
+        ui.channelBanner.isVisible = true
+        ui.channelBannerText.text = getString(
+            if (favs.isEmpty()) R.string.home_blast else R.string.home_favorites
+        )
+        setBusy(true, R.string.home_loading)
+        lifecycleScope.launch {
+            try {
+                val vids = if (favs.isEmpty()) {
+                    runCatching { Engine.channelVideos(this@MainActivity, BLAST_URL, 25) }
+                        .getOrElse { runCatching { Engine.search(this@MainActivity, BLAST_QUERY) }.getOrDefault(emptyList()) }
+                } else {
+                    val lists = favs.take(5).map { ch ->
+                        async {
+                            runCatching { Engine.channelVideos(this@MainActivity, ch.url, 8) }
+                                .getOrDefault(emptyList())
+                        }
+                    }.awaitAll()
+                    interleave(lists)
+                }
+                results.submit(vids)
+                ui.results.isVisible = vids.isNotEmpty()
+                if (vids.isEmpty()) ui.channelBanner.isVisible = false
+            } catch (e: Exception) {
+                ui.channelBanner.isVisible = false
+            } finally {
+                setBusy(false)
+            }
+        }
+    }
+
+    private fun interleave(lists: List<List<VideoItem>>): List<VideoItem> {
+        val out = ArrayList<VideoItem>()
+        val max = lists.maxOfOrNull { it.size } ?: 0
+        for (i in 0 until max) for (l in lists) if (i < l.size) out.add(l[i])
+        return out.distinctBy { it.url }
     }
 
     override fun onStart() {

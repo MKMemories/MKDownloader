@@ -62,6 +62,9 @@
     <string name="channel_removed">Chaîne retirée des favoris</string>
     <string name="channel_header">Chaîne : %1$s</string>
     <string name="loading_channel">Chargement de la chaîne…</string>
+    <string name="home_favorites">À la une · vos chaînes favorites</string>
+    <string name="home_blast">À la une · Blast — Le souffle de l\'info</string>
+    <string name="home_loading">Chargement du fil d\'accueil…</string>
 
     <!-- Téléchargement -->
     <string name="choose_quality">Qualité du téléchargement</string>
