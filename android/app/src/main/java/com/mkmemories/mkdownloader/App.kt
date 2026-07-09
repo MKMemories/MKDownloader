@@ -5,13 +5,28 @@ import android.content.Context
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-class App : Application()
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // Initialisation + mise à jour silencieuse de yt-dlp dès le lancement :
+        // les extracteurs YouTube cassent vite quand ils sont datés.
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { Engine.ensureReady(this@App) }
+            runCatching {
+                YoutubeDL.getInstance().updateYoutubeDL(this@App, YoutubeDL.UpdateChannel.STABLE)
+            }
+        }
+    }
+}
 
 /** Moteur yt-dlp + ffmpeg embarqué : initialisation, analyse, recherche, streaming. */
 object Engine {

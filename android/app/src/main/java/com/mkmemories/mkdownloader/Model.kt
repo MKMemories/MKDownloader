@@ -38,7 +38,10 @@ fun formatDuration(seconds: Int): String {
 
 fun cleanError(e: Throwable): String {
     val raw = e.message ?: return "Une erreur est survenue."
-    val line = raw.lineSequence().firstOrNull { it.contains("ERROR", ignoreCase = true) }
-        ?: raw.lineSequence().first()
+    val lines = raw.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+    if (lines.isEmpty()) return "Une erreur est survenue."
+    val line = lines.lastOrNull { it.startsWith("ERROR", ignoreCase = true) }
+        ?: lines.lastOrNull { !it.startsWith("WARNING", ignoreCase = true) }
+        ?: lines.last()
     return line.removePrefix("ERROR:").trim().take(300)
 }
