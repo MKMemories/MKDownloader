@@ -147,4 +147,22 @@
     <string name="removed_from">Retiré de « %1$s »</string>
     <string name="fav_added">Ajouté aux favoris ★</string>
     <string name="fav_removed">Retiré des favoris</string>
+
+    <!-- Paroles synchronisées -->
+    <string name="lyrics">Paroles</string>
+    <string name="lyrics_loading">Recherche des paroles…</string>
+    <string name="lyrics_none">Paroles synchronisées indisponibles pour ce titre.</string>
+
+    <!-- Minuteur de sommeil -->
+    <string name="sleep_timer">Minuteur de sommeil</string>
+    <string name="sleep_15">15 minutes</string>
+    <string name="sleep_30">30 minutes</string>
+    <string name="sleep_45">45 minutes</string>
+    <string name="sleep_60">1 heure</string>
+    <string name="sleep_end_of_track">Fin du morceau</string>
+    <string name="sleep_off">Désactiver</string>
+    <string name="sleep_set">Minuteur : pause dans %1$d min</string>
+    <string name="sleep_set_track">Minuteur : pause en fin de morceau</string>
+    <string name="sleep_cancelled">Minuteur désactivé</string>
+    <string name="sleep_done">Minuteur : lecture mise en pause 🌙</string>
 </resources>

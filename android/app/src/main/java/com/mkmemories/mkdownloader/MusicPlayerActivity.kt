@@ -21,12 +21,15 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.palette.graphics.Palette
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSmoothScroller
 import coil.ImageLoader
 import coil.request.ImageRequest
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.common.util.concurrent.ListenableFuture
 import com.mkmemories.mkdownloader.databinding.ActivityMusicPlayerBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
@@ -51,6 +54,22 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var controller: MediaController? = null
     private var queue: List<VideoItem> = emptyList()
     private var seeking = false
+
+    // Paroles synchronisées
+    private val lyricsAdapter = LyricsAdapter()
+    private var lrc: List<LrcLine> = emptyList()
+    private var lyricsJob: Job? = null
+    private var lyricsLoadedFor: String? = null
+    private var lastLyricIndex = -1
+
+    // Minuteur de sommeil
+    private var sleepActive = false
+    private val sleepRunnable = Runnable {
+        controller?.pause()
+        sleepActive = false
+        updateSleepIcon()
+        toast(getString(R.string.sleep_done))
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val ticker = object : Runnable {
@@ -80,6 +99,12 @@ class MusicPlayerActivity : AppCompatActivity() {
         ui.downloadButton.setOnClickListener { currentTrack()?.let { downloadMp3(it) } }
         ui.addPlaylistButton.setOnClickListener { togglePlaylist() }
         ui.queueButton.setOnClickListener { showQueue() }
+        ui.lyricsButton.setOnClickListener { toggleLyrics() }
+        ui.lyricsClose.setOnClickListener { ui.lyricsPanel.isVisible = false }
+        ui.sleepButton.setOnClickListener { showSleepDialog() }
+
+        ui.lyricsList.layoutManager = LinearLayoutManager(this)
+        ui.lyricsList.adapter = lyricsAdapter
 
         ui.seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {}
@@ -193,6 +218,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         updatePlaylistButton()
         val dur = controller?.duration ?: 0L
         ui.durTime.text = formatMs(if (dur > 0) dur else 0)
+        if (ui.lyricsPanel.isVisible) loadLyricsForCurrent()
     }
 
     private fun loadArt(url: String?) {
@@ -258,6 +284,116 @@ class MusicPlayerActivity : AppCompatActivity() {
             ui.posTime.text = formatMs(c.currentPosition)
             ui.durTime.text = formatMs(dur)
         }
+        updateLyrics(c.currentPosition)
+    }
+
+    // ---------- Paroles synchronisées ----------
+
+    private fun toggleLyrics() {
+        val show = !ui.lyricsPanel.isVisible
+        ui.lyricsPanel.isVisible = show
+        if (show) loadLyricsForCurrent()
+    }
+
+    private fun loadLyricsForCurrent() {
+        val t = currentTrack() ?: return
+        if (lyricsLoadedFor == t.url) return
+        lyricsLoadedFor = t.url
+        lrc = emptyList(); lastLyricIndex = -1; lyricsAdapter.submit(emptyList())
+        ui.lyricsList.isVisible = false
+        ui.lyricsStatus.text = getString(R.string.lyrics_loading)
+        ui.lyricsStatus.isVisible = true
+        lyricsJob?.cancel()
+        lyricsJob = lifecycleScope.launch {
+            val durSec = ((controller?.duration ?: 0L) / 1000).toInt().takeIf { it > 0 } ?: t.durationSec
+            val result = runCatching {
+                Lyrics.fetch(t.title, t.uploader ?: t.channelName, durSec)
+            }.getOrNull()
+            if (result.isNullOrEmpty()) {
+                ui.lyricsStatus.text = getString(R.string.lyrics_none)
+                ui.lyricsStatus.isVisible = true
+                ui.lyricsList.isVisible = false
+            } else {
+                lrc = result
+                lyricsAdapter.submit(result)
+                ui.lyricsStatus.isVisible = false
+                ui.lyricsList.isVisible = true
+            }
+        }
+    }
+
+    private fun updateLyrics(positionMs: Long) {
+        if (!ui.lyricsPanel.isVisible || lrc.isEmpty()) return
+        var idx = -1
+        for (i in lrc.indices) { if (lrc[i].timeMs <= positionMs) idx = i else break }
+        if (idx >= 0 && idx != lastLyricIndex) {
+            lastLyricIndex = idx
+            lyricsAdapter.setCurrent(idx)
+            centerLyric(idx)
+        }
+    }
+
+    private fun centerLyric(index: Int) {
+        val lm = ui.lyricsList.layoutManager as? LinearLayoutManager ?: return
+        val scroller = object : LinearSmoothScroller(this) {
+            override fun getVerticalSnapPreference() = SNAP_TO_START
+            override fun calculateDtToFit(vs: Int, ve: Int, bs: Int, be: Int, snap: Int): Int =
+                (bs + (be - bs) / 2) - (vs + (ve - vs) / 2)
+        }
+        scroller.targetPosition = index
+        lm.startSmoothScroll(scroller)
+    }
+
+    // ---------- Minuteur de sommeil ----------
+
+    private fun showSleepDialog() {
+        val labels = arrayOf(
+            getString(R.string.sleep_15), getString(R.string.sleep_30),
+            getString(R.string.sleep_45), getString(R.string.sleep_60),
+            getString(R.string.sleep_end_of_track), getString(R.string.sleep_off),
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.sleep_timer)
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> setSleep(15)
+                    1 -> setSleep(30)
+                    2 -> setSleep(45)
+                    3 -> setSleep(60)
+                    4 -> setSleepEndOfTrack()
+                    5 -> cancelSleep()
+                }
+            }
+            .show()
+    }
+
+    private fun setSleep(minutes: Int) {
+        handler.removeCallbacks(sleepRunnable)
+        handler.postDelayed(sleepRunnable, minutes * 60_000L)
+        sleepActive = true
+        updateSleepIcon()
+        toast(getString(R.string.sleep_set, minutes))
+    }
+
+    private fun setSleepEndOfTrack() {
+        val c = controller ?: return
+        val remaining = (c.duration - c.currentPosition).coerceAtLeast(1_000L)
+        handler.removeCallbacks(sleepRunnable)
+        handler.postDelayed(sleepRunnable, remaining)
+        sleepActive = true
+        updateSleepIcon()
+        toast(getString(R.string.sleep_set_track))
+    }
+
+    private fun cancelSleep() {
+        handler.removeCallbacks(sleepRunnable)
+        sleepActive = false
+        updateSleepIcon()
+        toast(getString(R.string.sleep_cancelled))
+    }
+
+    private fun updateSleepIcon() {
+        ui.sleepButton.setIconTintResource(if (sleepActive) R.color.accent2 else R.color.text_dim)
     }
 
     private fun toggleFav() {
@@ -342,6 +478,8 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(sleepRunnable)
+        lyricsJob?.cancel()
         controller?.removeListener(playerListener)
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null
