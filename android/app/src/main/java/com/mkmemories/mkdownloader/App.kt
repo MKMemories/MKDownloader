@@ -195,6 +195,7 @@ object Engine {
             val request = YoutubeDLRequest(url).apply {
                 addOption("--no-playlist"); addOption("--no-warnings")
                 addOption("-f", "b[ext=mp4][height<=1080]/b[ext=mp4]/b[height<=720]/best")
+                addOption("--extractor-args", "youtube:player_client=android")
                 addOption("-g")
             }
             YoutubeDL.getInstance().execute(request, null, null).out
@@ -213,6 +214,9 @@ object Engine {
             val request = YoutubeDLRequest(url).apply {
                 addOption("--no-playlist"); addOption("--no-warnings")
                 addOption("-f", "ba[ext=m4a]/ba[acodec^=mp4a]/b[ext=mp4]/ba/b")
+                // Client "android" : URLs directement lisibles, NON limitées
+                // (évite le débit en à-coups / coupures toutes les ~10 s).
+                addOption("--extractor-args", "youtube:player_client=android")
                 addOption("-g")
             }
             YoutubeDL.getInstance().execute(request, null, null).out
