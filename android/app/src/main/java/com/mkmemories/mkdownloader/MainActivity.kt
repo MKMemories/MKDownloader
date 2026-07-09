@@ -207,32 +207,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadTv() {
-        if (tvAll.isNotEmpty()) { applyTvFilter(); return }
-        ui.tvProgress.isVisible = true
+        tvAll = Tv.CHANNELS
+        ui.tvProgress.isVisible = false
         ui.tvStatus.isVisible = false
-        lifecycleScope.launch {
-            try {
-                tvAll = Tv.channels()
-                applyTvFilter()
-                if (tvAll.isEmpty()) showTvStatus(getString(R.string.tv_empty))
-            } catch (e: Exception) {
-                showTvStatus(getString(R.string.tv_error))
-            } finally {
-                ui.tvProgress.isVisible = false
-            }
-        }
-    }
-
-    private fun showTvStatus(msg: String) {
-        ui.tvStatus.text = msg
-        ui.tvStatus.isVisible = true
+        applyTvFilter()
     }
 
     private fun playChannel(c: TvChannel) {
+        c.note?.let { toast(it) }
         startActivity(Intent(this, PlayerActivity::class.java).apply {
             putExtra(PlayerActivity.EXTRA_URL, c.url)
             putExtra(PlayerActivity.EXTRA_TITLE, c.name)
-            putExtra(PlayerActivity.EXTRA_DIRECT, true)
+            // resolve=true → passe par yt-dlp (YouTube live, france.tv…)
+            putExtra(PlayerActivity.EXTRA_DIRECT, !c.resolve)
         })
     }
 

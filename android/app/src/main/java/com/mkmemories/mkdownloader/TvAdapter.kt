@@ -28,8 +28,9 @@ class TvAdapter(
         val c = items[position]
         with(holder.ui) {
             tvName.text = c.name
-            tvGroup.text = c.group ?: ""
-            tvGroup.isVisible = !c.group.isNullOrEmpty()
+            val meta = listOfNotNull(c.group, c.note).joinToString(" · ")
+            tvGroup.text = meta
+            tvGroup.isVisible = meta.isNotEmpty()
             if (!c.logo.isNullOrEmpty()) tvLogo.load(c.logo)
             else tvLogo.setImageResource(android.R.drawable.ic_menu_slideshow)
             root.setOnClickListener { onPlay(c) }

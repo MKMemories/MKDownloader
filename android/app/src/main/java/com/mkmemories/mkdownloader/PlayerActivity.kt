@@ -98,13 +98,16 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
             }
             if (url.isNullOrEmpty()) { toast(getString(R.string.no_results)); finish(); return@launch }
 
-            // Les flux TV en direct sont en HLS (.m3u8) ; on laisse ExoPlayer
-            // déduire le type pour ces liens, MP4 sinon.
+            // Type déduit du contenu (HLS pour les directs, MP4 pour les vidéos).
             val builder = MediaItem.Builder()
                 .setUri(url)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(videoTitle).build())
-            if (!direct) builder.setMimeType(MimeTypes.VIDEO_MP4)
-            else if (url.contains(".m3u8")) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+            when {
+                url.contains(".m3u8") || url.contains("/manifest/hls") ->
+                    builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+                url.contains(".mpd") -> builder.setMimeType(MimeTypes.APPLICATION_MPD)
+                url.contains(".mp4") -> builder.setMimeType(MimeTypes.VIDEO_MP4)
+            }
             mediaItem = builder.build()
 
             buildExo()
