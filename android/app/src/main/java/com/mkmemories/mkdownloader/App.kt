@@ -194,6 +194,23 @@ object Engine {
         search(context, "$query", DateFilter.ANY, limit)
 
     /**
+     * Importe une playlist publique/partagée depuis son lien
+     * (music.youtube.com/playlist?list=… ou youtube.com/playlist?list=…).
+     * Renvoie (titre, morceaux). Les playlists PRIVÉES (bibliothèque perso)
+     * exigent une connexion Google et ne sont pas accessibles par simple lien.
+     */
+    suspend fun importPlaylist(context: Context, url: String, limit: Int = 500): Pair<String?, List<VideoItem>> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val root = runJson(url) {
+                addOption("--dump-single-json"); addOption("--flat-playlist")
+                addOption("--playlist-end", limit); addOption("--no-warnings")
+            }
+            val title = root.optStringOrNull("title")
+            title to entries(root).mapNotNull(::videoFromEntry)
+        }
+
+    /**
      * URL d'un flux vidéo **progressif unique** (vidéo+audio déjà muxés) pour un
      * démarrage quasi instantané et un cast direct. On privilégie le meilleur MP4
      * combiné (jusqu'à 720p côté YouTube) : pas de fusion à la volée = pas de latence.

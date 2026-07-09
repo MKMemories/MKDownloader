@@ -77,6 +77,18 @@ object Favorites {
         savePlaylists(c, map)
     }
 
+    /** Ajoute plusieurs morceaux d'un coup (import de playlist) ; renvoie le nb ajoutés. */
+    fun addAllToPlaylist(c: Context, name: String, items: List<VideoItem>): Int {
+        val map = playlists(c)
+        val list = map.getOrPut(name) { mutableListOf() }
+        var added = 0
+        items.forEach { item ->
+            if (list.none { it.url == item.url }) { list.add(item); added++ }
+        }
+        savePlaylists(c, map)
+        return added
+    }
+
     fun removeFromPlaylist(c: Context, name: String, url: String) {
         val map = playlists(c)
         map[name]?.removeAll { it.url == url }

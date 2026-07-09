@@ -559,6 +559,70 @@ class MainActivity : AppCompatActivity() {
         ui.musicInput.setOnEditorActionListener { _, _, _ -> musicSearch(); true }
         ui.musicGo.setOnClickListener { musicSearch() }
         ui.newPlaylist.setOnClickListener { promptNewPlaylist() }
+        ui.musicImport.setOnClickListener { showImportDialog() }
+    }
+
+    /** Import d'une playlist YouTube / YouTube Music à partir de son lien. */
+    private fun showImportDialog() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val input = AppCompatEditText(this).apply {
+            hint = getString(R.string.import_playlist_hint)
+            setSingleLine(true)
+            clipboardText()?.let { if (it.contains("list=") || it.contains("playlist")) setText(it) }
+        }
+        val note = android.widget.TextView(this).apply {
+            text = getString(R.string.import_playlist_note)
+            textSize = 12f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.text_dim))
+            setPadding(0, pad / 2, 0, 0)
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input); addView(note)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.import_playlist_title)
+            .setView(box)
+            .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton(R.string.import_listen) { _, _ ->
+                input.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { importPlaylistFlow(it, save = false) }
+            }
+            .setPositiveButton(R.string.import_save) { _, _ ->
+                input.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { importPlaylistFlow(it, save = true) }
+            }
+            .show()
+    }
+
+    private fun clipboardText(): String? =
+        (getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+            ?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+
+    private fun importPlaylistFlow(url: String, save: Boolean) {
+        if (busy) { toast(getString(R.string.one_at_a_time)); return }
+        busy = true
+        ui.musicProgress.isVisible = true
+        toast(getString(R.string.importing))
+        lifecycleScope.launch {
+            try {
+                val (title, tracks) = Engine.importPlaylist(this@MainActivity, url)
+                if (tracks.isEmpty()) { toast(getString(R.string.import_empty)); return@launch }
+                val name = title?.takeIf { it.isNotBlank() } ?: getString(R.string.import_playlist_title)
+                if (save) {
+                    Favorites.createPlaylist(this@MainActivity, name)
+                    val added = Favorites.addAllToPlaylist(this@MainActivity, name, tracks)
+                    refreshPlaylists()
+                    toast(getString(R.string.imported, name, added))
+                } else {
+                    toast(getString(R.string.import_played, name, tracks.size))
+                    openMusic(tracks, 0)
+                }
+            } catch (e: Exception) {
+                toast(cleanError(e))
+            } finally {
+                busy = false; ui.musicProgress.isVisible = false
+            }
+        }
     }
 
     private fun musicSearch() {
