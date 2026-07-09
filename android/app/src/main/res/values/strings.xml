@@ -11,8 +11,8 @@
 
     <!-- Direct TV -->
     <string name="tv">Chaîne TV</string>
-    <string name="tv_header">Direct TV — chaînes françaises en clair</string>
-    <string name="tv_subtitle">Chaînes gratuites diffusées en clair (France TV, Arte…). Contenus payants/DRM non inclus.</string>
+    <string name="tv_header">Direct TV — info en continu</string>
+    <string name="tv_subtitle">Directs 24/7 gratuits (YouTube). Les chaînes en DRM (TF1, France 2/4/5, M6…) ne sont pas diffusables et sont exclues.</string>
     <string name="tv_filter_hint">Filtrer une chaîne…</string>
     <string name="tv_empty">Aucune chaîne trouvée.</string>
     <string name="tv_error">Impossible de charger la liste des chaînes (réseau ?).</string>

@@ -247,6 +247,8 @@ class MainActivity : AppCompatActivity() {
         ui.tvList.layoutManager = LinearLayoutManager(this)
         ui.tvList.adapter = tv
         ui.tvFilter.addTextChangedListener { applyTvFilter() }
+        // Le login TF1/M6 ne débloque pas le DRM → bouton masqué.
+        ui.tvAccounts.isVisible = false
         ui.tvAccounts.setOnClickListener { showAccountsDialog() }
     }
 
