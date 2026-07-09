@@ -1,4 +1,6 @@
-# Déployer MKDownloader sur Hugging Face Spaces (gratuit, sans carte bancaire)
+# Déployer MKDownloader sur Hugging Face Spaces
+
+> ⚠️ **Obsolète (juillet 2026)** : Hugging Face a rendu les Spaces Docker payants (abonnement PRO). Ce guide est conservé au cas où une offre gratuite reviendrait. Voir plutôt [`../auto-hebergement.md`](../auto-hebergement.md) ou [`../android-termux.md`](../android-termux.md).
 
 Hugging Face Spaces héberge gratuitement des conteneurs Docker (2 vCPU, 16 Go de RAM sur l'offre gratuite) — largement assez pour cette application, ffmpeg compris. Aucune carte bancaire n'est demandée.
 

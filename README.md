@@ -60,7 +60,14 @@ Instagram exige presque toujours une session connectée, et Facebook la demande 
 
 > ⚠️ **Vercel et Netlify ne fonctionnent pas** : ces plateformes serverless n'ont ni ffmpeg, ni exécution longue, ni stockage de fichiers. Il faut un hébergeur qui exécute un conteneur Docker persistant.
 
-### Option gratuite : Render (déploiement en un clic)
+### Hébergement gratuit : la réalité de 2026
+
+Plus aucun cloud n'offre d'hébergement Docker gratuit **sans carte bancaire** (Render, Koyeb, Fly.io, Railway et Oracle demandent une carte ; Hugging Face a rendu les Spaces Docker payants). Les vraies solutions 100 % gratuites :
+
+- **[Auto-hébergement PC / Mac / Raspberry Pi](deploy/auto-hebergement.md)** — recommandé : aucune limite, accès distant gratuit via Tailscale ou tunnel Cloudflare.
+- **[Directement sur un téléphone Android](deploy/android-termux.md)** via Termux.
+
+### Render (nécessite d'enregistrer une carte, non facturée sur l'offre free)
 
 1. Créez un compte sur [render.com](https://render.com) (connexion GitHub).
 2. **New → Blueprint** → sélectionnez ce repo : le fichier `render.yaml` configure tout.
