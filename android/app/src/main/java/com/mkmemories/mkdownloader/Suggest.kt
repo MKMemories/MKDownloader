@@ -31,7 +31,7 @@ object Suggest {
  * telles quelles les suggestions renvoyées par le serveur.
  */
 class SuggestionsAdapter(context: Context) :
-    ArrayAdapter<String>(context, android.R.layout.simple_dropdown_item_1line) {
+    ArrayAdapter<String>(context, R.layout.item_suggestion, R.id.suggestionText) {
 
     fun replace(items: List<String>) {
         clear(); addAll(items); notifyDataSetChanged()

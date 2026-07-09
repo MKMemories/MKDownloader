@@ -41,25 +41,49 @@ class MainActivity : AppCompatActivity() {
     private var busy = false
     private val suggestJobs = HashMap<Int, Job>()
 
-    /** Autocomplétion YouTube en direct sur un champ de recherche. */
+    /** Autocomplétion YouTube en direct, habillage premium. */
     private fun attachSuggestions(field: AutoCompleteTextView, onPick: () -> Unit) {
         val adapter = SuggestionsAdapter(this)
         field.setAdapter(adapter)
         field.threshold = 1
-        field.setOnItemClickListener { _, _, _, _ -> onPick() }
+        field.setDropDownBackgroundResource(R.drawable.dropdown_bg)
+        field.dropDownVerticalOffset = (8 * resources.displayMetrics.density).toInt()
+        // Ignore le prochain changement de texte déclenché par une sélection
+        // (sinon la liste se rouvre aussitôt).
+        var suppress = false
+        field.setOnItemClickListener { _, _, _, _ ->
+            suppress = true
+            field.dismissDropDown()
+            hideKeyboard(field)
+            onPick()
+        }
         field.addTextChangedListener { editable ->
+            if (suppress) { suppress = false; return@addTextChangedListener }
             val q = editable?.toString()?.trim().orEmpty()
             suggestJobs[field.id]?.cancel()
-            if (q.length < 2 || q.startsWith("http")) return@addTextChangedListener
+            if (q.length < 2 || q.startsWith("http")) { field.dismissDropDown(); return@addTextChangedListener }
             suggestJobs[field.id] = lifecycleScope.launch {
                 delay(180)
                 val list = runCatching { Suggest.fetch(q) }.getOrDefault(emptyList())
-                if (list.isNotEmpty()) {
+                if (list.isNotEmpty() && field.hasFocus()) {
                     adapter.replace(list)
-                    if (field.hasFocus()) field.showDropDown()
+                    field.showDropDown()
                 }
             }
         }
+    }
+
+    private fun hideKeyboard(view: View) {
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+            .hideSoftInputFromWindow(view.windowToken, 0)
+        view.clearFocus()
+    }
+
+    /** Ferme l'autocomplétion + le clavier au lancement d'une recherche. */
+    private fun closeSuggest(field: AutoCompleteTextView) {
+        suggestJobs[field.id]?.cancel()
+        field.dismissDropDown()
+        hideKeyboard(field)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -272,6 +296,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun submit() {
+        closeSuggest(ui.searchInput)
         val input = ui.searchInput.text?.toString().orEmpty().trim()
         if (input.isEmpty() || busy) return
         if (input.startsWith("http://") || input.startsWith("https://")) analyzeUrl(input)
@@ -416,6 +441,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun musicSearch() {
+        closeSuggest(ui.musicInput)
         val q = ui.musicInput.text?.toString().orEmpty().trim()
         if (q.isEmpty() || busy) return
         lastQuery = q
@@ -556,6 +582,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun channelSearch() {
+        closeSuggest(ui.channelInput)
         val q = ui.channelInput.text?.toString().orEmpty().trim()
         if (q.isEmpty() || busy) { if (q.isEmpty()) refreshFavorites(); return }
         busy = true
