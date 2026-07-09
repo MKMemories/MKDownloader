@@ -479,7 +479,7 @@
                         app:boxBackgroundColor="@color/card"
                         app:hintTextColor="@color/text_dim">
 
-                        <com.google.android.material.textfield.TextInputEditText
+                        <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/channelInput"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
