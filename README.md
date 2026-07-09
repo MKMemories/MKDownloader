@@ -1,5 +1,7 @@
 # MKDownloader ⬇
 
+![MKDownloader](design/hero.png)
+
 Application web **auto-hébergée** de téléchargement vidéo en **qualité maximale** (HD, 4K, 8K quand disponible). Sans limite, sans publicité, 100 % gratuite.
 
 Optimisée pour **Facebook**, **YouTube** et **Instagram**, et compatible avec les 1 000+ sites pris en charge par [yt-dlp](https://github.com/yt-dlp/yt-dlp) (TikTok, X/Twitter, Vimeo, Dailymotion…).
