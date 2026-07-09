@@ -23,13 +23,6 @@ object Settings {
         return if (u.isNotEmpty() && p.isNotEmpty()) Creds(u, p) else null
     }
 
-    fun setIptvUrl(c: Context, url: String) {
-        prefs(c).edit().putString("iptv_url", url).apply()
-    }
-
-    fun getIptvUrl(c: Context): String? =
-        prefs(c).getString("iptv_url", "")?.takeIf { it.isNotBlank() }
-
     /** Renvoie les identifiants correspondant à la plateforme d'une URL, si connus. */
     fun credsForUrl(c: Context, url: String): Creds? {
         val u = url.lowercase()

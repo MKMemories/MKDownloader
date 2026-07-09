@@ -247,41 +247,8 @@ class MainActivity : AppCompatActivity() {
         ui.tvList.layoutManager = LinearLayoutManager(this)
         ui.tvList.adapter = tv
         ui.tvFilter.addTextChangedListener { applyTvFilter() }
-        ui.tvAccounts.text = getString(R.string.iptv_button)
-        ui.tvAccounts.setOnClickListener { showIptvDialog() }
-    }
-
-    private fun showIptvDialog() {
-        val view = layoutInflater.inflate(R.layout.dialog_iptv, null)
-        val urlF = view.findViewById<android.widget.EditText>(R.id.iptvUrl)
-        val hostF = view.findViewById<android.widget.EditText>(R.id.xtHost)
-        val userF = view.findViewById<android.widget.EditText>(R.id.xtUser)
-        val passF = view.findViewById<android.widget.EditText>(R.id.xtPass)
-        Settings.getIptvUrl(this)?.let { urlF.setText(it) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.iptv_button)
-            .setView(view)
-            .setNeutralButton(R.string.iptv_clear) { _, _ ->
-                Settings.setIptvUrl(this, ""); loadTv()
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.save) { _, _ ->
-                val url = urlF.text?.toString()?.trim().orEmpty()
-                val host = hostF.text?.toString()?.trim().orEmpty()
-                val user = userF.text?.toString()?.trim().orEmpty()
-                val pass = passF.text?.toString()?.trim().orEmpty()
-                val finalUrl = when {
-                    url.isNotEmpty() -> url
-                    host.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty() -> {
-                        val base = if (host.startsWith("http")) host else "http://$host"
-                        "$base/get.php?username=$user&password=$pass&type=m3u_plus&output=m3u8"
-                    }
-                    else -> ""
-                }
-                Settings.setIptvUrl(this, finalUrl)
-                loadTv()
-            }
-            .show()
+        // Plus d'IPTV ni de comptes DRM : la liste est 100 % directs YouTube.
+        ui.tvAccounts.isVisible = false
     }
 
     private fun showAccountsDialog() {
@@ -312,29 +279,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadTv() {
-        val iptv = Settings.getIptvUrl(this)
-        if (iptv == null) {
-            tvAll = Tv.CHANNELS
-            ui.tvProgress.isVisible = false
-            ui.tvStatus.isVisible = false
-            applyTvFilter()
-            return
-        }
-        // Playlist IPTV de l'utilisateur.
-        ui.tvProgress.isVisible = true
+        tvAll = Tv.CHANNELS
+        ui.tvProgress.isVisible = false
         ui.tvStatus.isVisible = false
-        lifecycleScope.launch {
-            try {
-                tvAll = Tv.fetchIptv(iptv)
-                applyTvFilter()
-                if (tvAll.isEmpty()) showTvStatus(getString(R.string.iptv_empty))
-            } catch (e: Exception) {
-                tvAll = emptyList(); applyTvFilter()
-                showTvStatus(getString(R.string.iptv_error))
-            } finally {
-                ui.tvProgress.isVisible = false
-            }
-        }
+        applyTvFilter()
     }
 
     private fun showTvStatus(msg: String) {

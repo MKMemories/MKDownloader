@@ -17,17 +17,6 @@
     <string name="tv_empty">Aucune chaîne trouvée.</string>
     <string name="tv_error">Impossible de charger la liste des chaînes (réseau ?).</string>
     <string name="tv_accounts">Comptes</string>
-    <string name="iptv_button">IPTV</string>
-    <string name="iptv_m3u_label">Playlist M3U (recommandé)</string>
-    <string name="iptv_m3u_hint">URL de la playlist (…get.php?… ou lien .m3u/.m3u8)</string>
-    <string name="iptv_xtream_label">— ou identifiants Xtream Codes —</string>
-    <string name="iptv_host">Hôte (ex. http://serveur:port)</string>
-    <string name="iptv_user">Utilisateur</string>
-    <string name="iptv_pass">Mot de passe</string>
-    <string name="iptv_note">Collez l\'URL de playlist fournie par VOTRE abonnement IPTV. Elle est stockée uniquement sur cet appareil. Videz le champ pour revenir aux chaînes gratuites.</string>
-    <string name="iptv_clear">Effacer</string>
-    <string name="iptv_empty">Playlist vide ou illisible.</string>
-    <string name="iptv_error">Impossible de charger la playlist (URL/abonnement ?).</string>
     <string name="tf1_account">Compte TF1 / MYTF1 (gratuit)</string>
     <string name="m6_account">Compte M6 / 6play (gratuit)</string>
     <string name="email">E-mail</string>
