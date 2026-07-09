@@ -6,3 +6,7 @@ data/
 cookies.txt
 .env
 data-test/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

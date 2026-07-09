@@ -14,6 +14,10 @@ Optimisée pour **Facebook**, **YouTube** et **Instagram**, et compatible avec l
 - 🧹 **Purge automatique** des fichiers après quelques heures (configurable).
 - 🐳 **Déploiement Docker en une commande**, avec mise à jour automatique de yt-dlp au démarrage.
 
+## 📱 Application Android (APK)
+
+Une application Android native est disponible : moteur yt-dlp + ffmpeg embarqué, partage direct depuis Facebook/YouTube/Instagram, aucun serveur nécessaire. Téléchargez `MKDownloader.apk` dans l'onglet **[Releases](../../releases/tag/latest)** (compilé automatiquement par GitHub Actions). Détails : [`android/README.md`](android/README.md).
+
 ## Démarrage rapide (Docker — recommandé)
 
 ```bash
