@@ -1,87 +1,117 @@
-"""API FastAPI de MKDownloader + service des fichiers statiques."""
+"""API HTTP de MKDownloader (Starlette) + service des fichiers statiques.
+
+Starlette plutôt que FastAPI : aucune dépendance compilée (pydantic-core
+exige Rust), donc l'application s'installe partout — y compris sur un
+téléphone Android via Termux.
+"""
 
 import os
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
+from starlette.responses import FileResponse, JSONResponse
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
-from .downloader import QUALITY_PRESETS, manager, probe
+from .downloader import QUALITY_PRESETS, _clean_error, manager, probe
 
 # Si APP_PASSWORD est défini, toutes les requêtes API doivent le fournir
 # (en-tête X-App-Key ou paramètre ?key=). Indispensable avant d'exposer
 # l'application sur Internet.
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 
-app = FastAPI(title="MKDownloader", docs_url=None, redoc_url=None)
+
+def _authorized(request) -> bool:
+    if not APP_PASSWORD:
+        return True
+    return (
+        request.headers.get("x-app-key", "") == APP_PASSWORD
+        or request.query_params.get("key", "") == APP_PASSWORD
+    )
 
 
-def require_key(
-    x_app_key: str = Header(default=""),
-    key: str = Query(default=""),
-) -> None:
-    if APP_PASSWORD and x_app_key != APP_PASSWORD and key != APP_PASSWORD:
-        raise HTTPException(status_code=401, detail="Mot de passe requis")
+def _deny() -> JSONResponse:
+    return JSONResponse({"detail": "Mot de passe requis"}, status_code=401)
 
 
-class UrlPayload(BaseModel):
-    url: str = Field(min_length=8, max_length=2000)
-
-
-class DownloadPayload(UrlPayload):
-    quality: str = "max"
-
-
-@app.get("/api/health")
-def health() -> dict:
-    return {"status": "ok", "protected": bool(APP_PASSWORD)}
-
-
-@app.get("/api/qualities", dependencies=[Depends(require_key)])
-def qualities() -> list[dict]:
-    return [{"id": key, "label": preset["label"]} for key, preset in QUALITY_PRESETS.items()]
-
-
-@app.post("/api/info", dependencies=[Depends(require_key)])
-async def info(payload: UrlPayload) -> dict:
+async def _json_body(request) -> dict:
     try:
-        return await run_in_threadpool(probe, payload.url)
+        data = await request.json()
+    except Exception:  # noqa: BLE001 — corps absent ou JSON invalide
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _extract_url(data: dict):
+    url = str(data.get("url", "")).strip()
+    return url if 8 <= len(url) <= 2000 else None
+
+
+async def health(request) -> JSONResponse:
+    return JSONResponse({"status": "ok", "protected": bool(APP_PASSWORD)})
+
+
+async def qualities(request) -> JSONResponse:
+    if not _authorized(request):
+        return _deny()
+    return JSONResponse(
+        [{"id": key, "label": preset["label"]} for key, preset in QUALITY_PRESETS.items()]
+    )
+
+
+async def info(request) -> JSONResponse:
+    if not _authorized(request):
+        return _deny()
+    url = _extract_url(await _json_body(request))
+    if url is None:
+        return JSONResponse(
+            {"detail": "URL invalide : collez un lien http(s) complet."}, status_code=400
+        )
+    try:
+        result = await run_in_threadpool(probe, url)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        return JSONResponse({"detail": str(exc)}, status_code=400)
     except Exception as exc:  # noqa: BLE001 — yt-dlp lève des types variés
-        from .downloader import _clean_error
+        return JSONResponse({"detail": _clean_error(str(exc))}, status_code=422)
+    return JSONResponse(result)
 
-        raise HTTPException(status_code=422, detail=_clean_error(str(exc)))
 
-
-@app.post("/api/download", dependencies=[Depends(require_key)])
-def download(payload: DownloadPayload) -> dict:
+async def download(request) -> JSONResponse:
+    if not _authorized(request):
+        return _deny()
+    data = await _json_body(request)
+    url = _extract_url(data)
+    if url is None:
+        return JSONResponse(
+            {"detail": "URL invalide : collez un lien http(s) complet."}, status_code=400
+        )
+    quality = str(data.get("quality", "max"))
     try:
-        job = manager.start(payload.url, payload.quality)
+        job = manager.start(url, quality)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        return JSONResponse({"detail": str(exc)}, status_code=400)
     except RuntimeError as exc:
-        raise HTTPException(status_code=429, detail=str(exc))
-    return job.to_dict()
+        return JSONResponse({"detail": str(exc)}, status_code=429)
+    return JSONResponse(job.to_dict())
 
 
-@app.get("/api/jobs/{job_id}", dependencies=[Depends(require_key)])
-def job_status(job_id: str) -> dict:
-    job = manager.get(job_id)
+async def job_status(request) -> JSONResponse:
+    if not _authorized(request):
+        return _deny()
+    job = manager.get(request.path_params["job_id"])
     if job is None:
-        raise HTTPException(status_code=404, detail="Téléchargement introuvable ou expiré")
-    return job.to_dict()
+        return JSONResponse({"detail": "Téléchargement introuvable ou expiré"}, status_code=404)
+    return JSONResponse(job.to_dict())
 
 
-@app.get("/api/jobs/{job_id}/file", dependencies=[Depends(require_key)])
-def job_file(job_id: str) -> FileResponse:
-    job = manager.get(job_id)
+async def job_file(request):
+    if not _authorized(request):
+        return _deny()
+    job = manager.get(request.path_params["job_id"])
     if job is None or job.status != "finished" or not job.filepath:
-        raise HTTPException(status_code=404, detail="Fichier indisponible")
+        return JSONResponse({"detail": "Fichier indisponible"}, status_code=404)
     if not os.path.exists(job.filepath):
-        raise HTTPException(status_code=410, detail="Fichier expiré (purgé)")
+        return JSONResponse({"detail": "Fichier expiré (purgé)"}, status_code=410)
     return FileResponse(
         job.filepath,
         filename=job.filename or "video",
@@ -90,4 +120,15 @@ def job_file(job_id: str) -> FileResponse:
 
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+
+app = Starlette(
+    routes=[
+        Route("/api/health", health),
+        Route("/api/qualities", qualities),
+        Route("/api/info", info, methods=["POST"]),
+        Route("/api/download", download, methods=["POST"]),
+        Route("/api/jobs/{job_id}", job_status),
+        Route("/api/jobs/{job_id}/file", job_file),
+        Mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static"),
+    ]
+)
