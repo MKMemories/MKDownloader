@@ -151,6 +151,27 @@ class MainActivity : AppCompatActivity() {
         ui.tvList.layoutManager = LinearLayoutManager(this)
         ui.tvList.adapter = tv
         ui.tvFilter.addTextChangedListener { applyTvFilter() }
+        ui.tvAccounts.setOnClickListener { showAccountsDialog() }
+    }
+
+    private fun showAccountsDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_accounts, null)
+        val tf1U = view.findViewById<android.widget.EditText>(R.id.tf1User)
+        val tf1P = view.findViewById<android.widget.EditText>(R.id.tf1Pass)
+        val m6U = view.findViewById<android.widget.EditText>(R.id.m6User)
+        val m6P = view.findViewById<android.widget.EditText>(R.id.m6Pass)
+        Settings.creds(this, "tf1")?.let { tf1U.setText(it.user); tf1P.setText(it.pass) }
+        Settings.creds(this, "m6")?.let { m6U.setText(it.user); m6P.setText(it.pass) }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.tv_accounts)
+            .setView(view)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                Settings.setCreds(this, "tf1", tf1U.text.toString().trim(), tf1P.text.toString())
+                Settings.setCreds(this, "m6", m6U.text.toString().trim(), m6P.text.toString())
+                toast(getString(R.string.accounts_saved))
+            }
+            .show()
     }
 
     private fun applyTvFilter() {

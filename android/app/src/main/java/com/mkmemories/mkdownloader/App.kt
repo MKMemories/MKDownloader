@@ -94,10 +94,19 @@ object Engine {
 
     // ---------- Analyse d'un lien unique ----------
 
+    /** Ajoute les identifiants TF1/M6 à une requête si l'URL en relève. */
+    private fun YoutubeDLRequest.applyCreds(context: Context, url: String) {
+        Settings.credsForUrl(context, url)?.let {
+            addOption("--username", it.user)
+            addOption("--password", it.pass)
+        }
+    }
+
     suspend fun getInfo(context: Context, url: String): VideoItem = withContext(Dispatchers.IO) {
         ensureReady(context)
         val o = runJson(url) {
             addOption("--no-playlist"); addOption("--no-warnings"); addOption("--dump-single-json")
+            applyCreds(context, url)
         }
         val id = o.optStringOrNull("id")
         VideoItem(
@@ -196,6 +205,7 @@ object Engine {
                 addOption("--no-playlist"); addOption("--no-warnings")
                 addOption("-f", "b[ext=mp4][height<=1080]/b[ext=mp4]/b[height<=720]/best")
                 addOption("--extractor-args", "youtube:player_client=android")
+                applyCreds(context, url)
                 addOption("-g")
             }
             YoutubeDL.getInstance().execute(request, null, null).out

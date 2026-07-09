@@ -16,6 +16,14 @@
     <string name="tv_filter_hint">Filtrer une chaîne…</string>
     <string name="tv_empty">Aucune chaîne trouvée.</string>
     <string name="tv_error">Impossible de charger la liste des chaînes (réseau ?).</string>
+    <string name="tv_accounts">Comptes</string>
+    <string name="tf1_account">Compte TF1 / MYTF1 (gratuit)</string>
+    <string name="m6_account">Compte M6 / 6play (gratuit)</string>
+    <string name="email">E-mail</string>
+    <string name="password">Mot de passe</string>
+    <string name="save">Enregistrer</string>
+    <string name="accounts_saved">Comptes enregistrés ✔</string>
+    <string name="accounts_note">Identifiants de vos comptes gratuits TF1/M6, stockés uniquement sur cet appareil et transmis à yt-dlp pour accéder aux replays qui exigent une connexion.</string>
 
     <!-- Commun -->
     <string name="go">Rechercher</string>
