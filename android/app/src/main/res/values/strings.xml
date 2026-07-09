@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MKDownloader</string>
-    <string name="tagline">Téléchargez en qualité maximale\nFacebook · YouTube · Instagram…</string>
-    <string name="url_hint">Collez le lien de la vidéo</string>
+    <string name="tagline_v2">Regardez, cherchez, téléchargez — YouTube · Facebook · Instagram</string>
+    <string name="search_hint">Recherche YouTube ou lien vidéo…</string>
+    <string name="go">Rechercher</string>
     <string name="paste">📋 Coller</string>
-    <string name="analyze">Analyser</string>
+    <string name="play">▶ Lire</string>
     <string name="download">⬇ Télécharger</string>
+    <string name="close">Fermer</string>
     <string name="analyzing">Analyse du lien…</string>
-    <string name="starting">Préparation…</string>
+    <string name="searching">Recherche YouTube…</string>
+    <string name="no_results">Aucun résultat.</string>
+    <string name="choose_quality">Qualité du téléchargement</string>
+    <string name="download_started">Téléchargement lancé — suivez la progression sur l\'écran principal.</string>
+    <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>
     <string name="downloading">Téléchargement… %1$d%%</string>
-    <string name="processing">Fusion vidéo + audio…</string>
-    <string name="saving">Enregistrement dans Téléchargements…</string>
-    <string name="done">Terminé ✔</string>
-    <string name="saved_to">Enregistré dans %1$s</string>
-    <string name="untitled">Vidéo sans titre</string>
-    <string name="invalid_url">Collez un lien http(s) complet.</string>
-    <string name="no_file">Le téléchargement n\'a produit aucun fichier.</string>
-    <string name="generic_error">Le téléchargement a échoué.</string>
+    <string name="processing">Préparation / fusion en cours…</string>
     <string name="update_engine">Mettre à jour yt-dlp</string>
     <string name="updating">Mise à jour de yt-dlp…</string>
     <string name="thumb_desc">Miniature de la vidéo</string>
