@@ -75,6 +75,9 @@
     <string name="home_favorites">À la une · vos chaînes favorites</string>
     <string name="home_blast">À la une · Blast — Le souffle de l\'info</string>
     <string name="home_loading">Chargement du fil d\'accueil…</string>
+    <string name="home_resume">Reprendre la lecture</string>
+    <string name="home_channels">Vos chaînes</string>
+    <string name="home_trending">Tendances</string>
 
     <!-- Téléchargement -->
     <string name="choose_quality">Qualité du téléchargement</string>

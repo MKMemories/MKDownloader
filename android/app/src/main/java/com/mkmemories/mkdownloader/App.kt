@@ -149,6 +149,23 @@ object Engine {
         entries(root).mapNotNull(::videoFromEntry)
     }
 
+    /** Vidéos tendances du moment (page Tendances YouTube), pour l'accueil découverte. */
+    suspend fun trending(context: Context, limit: Int = 25): List<VideoItem> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val root = runCatching {
+                runJson("https://www.youtube.com/feed/trending") {
+                    addOption("--dump-single-json"); addOption("--flat-playlist")
+                    addOption("--playlist-end", limit); addOption("--no-warnings")
+                }
+            }.getOrNull()
+            val list = root?.let { entries(it).mapNotNull(::videoFromEntry) }.orEmpty()
+            // Repli si la page Tendances ne renvoie rien (structure changeante).
+            if (list.isNotEmpty()) list
+            else runCatching { search(context, "tendances du moment", DateFilter.WEEK, limit) }
+                .getOrDefault(emptyList())
+        }
+
     // ---------- Recherche de chaînes ----------
 
     /** Recherche YouTube filtrée « Chaînes » (jeton sp EgIQAg==). */

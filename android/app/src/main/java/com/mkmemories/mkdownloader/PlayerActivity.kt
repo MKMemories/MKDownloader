@@ -439,7 +439,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     override fun onStop() {
         super.onStop()
         uiHandler.removeCallbacks(hideGesture)
-        exo?.let { if (!live && !direct) Resume.save(this, videoUrl, it.currentPosition, it.duration) }
+        exo?.let { if (!live && !direct) Resume.save(this, videoUrl, videoTitle, it.currentPosition, it.duration) }
         exo?.release(); exo = null
         castPlayer?.setSessionAvailabilityListener(null)
         castPlayer?.release(); castPlayer = null

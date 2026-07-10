@@ -51,6 +51,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tv: TvAdapter
     private var tvAll: List<TvChannel> = emptyList()
 
+    private lateinit var resumeRow: CarouselAdapter
+    private lateinit var channelsRow: CarouselAdapter
+    private lateinit var trendingRow: CarouselAdapter
+
     private lateinit var cinema: CinemaAdapter
     private val cinemaLangs = linkedSetOf(Cinema.Lang.FR, Cinema.Lang.EN, Cinema.Lang.AR)
     private var cinemaGenre = Cinema.Genre.ALL
@@ -151,38 +155,58 @@ class MainActivity : AppCompatActivity() {
         if (intent?.action != Intent.ACTION_SEND) loadHomeFeed()
     }
 
-    /** Fil d'accueil : dernières vidéos des chaînes favorites (ou Blast par défaut). */
+    /**
+     * Accueil découverte : trois carrousels — Reprendre la lecture, Vos chaînes,
+     * Tendances. Remplace l'ancien fil unique par une vraie page de découverte.
+     */
     private fun loadHomeFeed() {
-        val favs = Favorites.channels(this)
         ui.videoCard.isVisible = false
-        ui.channelBanner.isVisible = true
-        ui.channelBannerText.text = getString(
-            if (favs.isEmpty()) R.string.home_blast else R.string.home_favorites
-        )
+        ui.channelBanner.isVisible = false
+        ui.results.isVisible = false
+        ui.homeScroll.isVisible = true
+
+        refreshResumeRow()
+
+        // Vos chaînes : dernières vidéos des favoris (ou Blast par défaut).
+        val favs = Favorites.channels(this)
         setBusy(true, R.string.home_loading)
         lifecycleScope.launch {
-            try {
-                val vids = if (favs.isEmpty()) {
-                    runCatching { Engine.channelVideos(this@MainActivity, BLAST_URL, 25) }
-                        .getOrElse { runCatching { Engine.search(this@MainActivity, BLAST_QUERY) }.getOrDefault(emptyList()) }
+            val channelsVids = runCatching {
+                if (favs.isEmpty()) {
+                    runCatching { Engine.channelVideos(this@MainActivity, BLAST_URL, 20) }
+                        .getOrElse { Engine.search(this@MainActivity, BLAST_QUERY, DateFilter.ANY, 20) }
                 } else {
-                    val lists = favs.take(5).map { ch ->
+                    val lists = favs.take(6).map { ch ->
                         async {
-                            runCatching { Engine.channelVideos(this@MainActivity, ch.url, 8) }
+                            runCatching { Engine.channelVideos(this@MainActivity, ch.url, 6) }
                                 .getOrDefault(emptyList())
                         }
                     }.awaitAll()
                     interleave(lists)
                 }
-                results.submit(vids)
-                ui.results.isVisible = vids.isNotEmpty()
-                if (vids.isEmpty()) ui.channelBanner.isVisible = false
-            } catch (e: Exception) {
-                ui.channelBanner.isVisible = false
-            } finally {
-                setBusy(false)
-            }
+            }.getOrDefault(emptyList())
+            channelsRow.submit(channelsVids.map { CarouselItem(it) })
+            ui.channelsSection.isVisible = channelsVids.isNotEmpty()
+            setBusy(false)
+
+            // Tendances (chargées séparément pour ne pas retarder l'affichage).
+            val trending = runCatching { Engine.trending(this@MainActivity, 25) }.getOrDefault(emptyList())
+            trendingRow.submit(trending.map { CarouselItem(it) })
+            ui.trendingSection.isVisible = trending.isNotEmpty()
         }
+    }
+
+    /** Rafraîchit le carrousel « Reprendre » depuis les positions de lecture mémorisées. */
+    private fun refreshResumeRow() {
+        val recent = Resume.recent(this)
+        val items = recent.map {
+            CarouselItem(
+                VideoItem(url = it.url, title = it.title, uploader = null, durationSec = 0, thumbnail = it.thumbnail),
+                progress = it.percent,
+            )
+        }
+        resumeRow.submit(items)
+        ui.resumeSection.isVisible = items.isNotEmpty()
     }
 
     private fun interleave(lists: List<List<VideoItem>>): List<VideoItem> {
@@ -198,6 +222,12 @@ class MainActivity : AppCompatActivity() {
         Downloads.onHistoryChanged = { if (ui.historyPane.isVisible) refreshHistory() }
         renderDownloadState(Downloads.state)
         bindMiniController()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Après une lecture, « Reprendre » se met à jour si l'accueil est affiché.
+        if (ui.homeScroll.isVisible) refreshResumeRow()
     }
 
     override fun onStop() {
@@ -373,6 +403,18 @@ class MainActivity : AppCompatActivity() {
         cinema = CinemaAdapter(onOpen = ::openFilm)
         ui.cinemaList.layoutManager = GridLayoutManager(this, 3)
         ui.cinemaList.adapter = cinema
+
+        resumeRow = CarouselAdapter(onPlay = ::openPlayer)
+        ui.resumeRow.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        ui.resumeRow.adapter = resumeRow
+
+        channelsRow = CarouselAdapter(onPlay = ::openPlayer)
+        ui.channelsRow.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        ui.channelsRow.adapter = channelsRow
+
+        trendingRow = CarouselAdapter(onPlay = ::openPlayer)
+        ui.trendingRow.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        ui.trendingRow.adapter = trendingRow
         // Plus d'IPTV ni de comptes DRM : la liste est 100 % directs YouTube.
         ui.tvAccounts.isVisible = false
     }
@@ -604,6 +646,7 @@ class MainActivity : AppCompatActivity() {
         ui.results.isVisible = false
         ui.videoCard.isVisible = false
         ui.channelBanner.isVisible = false
+        ui.homeScroll.isVisible = false
         lifecycleScope.launch {
             try {
                 val item = Engine.getInfo(this@MainActivity, url)
@@ -637,6 +680,7 @@ class MainActivity : AppCompatActivity() {
         setBusy(true, status)
         ui.videoCard.isVisible = false
         ui.channelBanner.isVisible = false
+        ui.homeScroll.isVisible = false
         lifecycleScope.launch {
             try {
                 val items = Engine.search(this@MainActivity, query, dateFilter)
@@ -704,6 +748,7 @@ class MainActivity : AppCompatActivity() {
     private fun openChannel(channel: ChannelItem) {
         ui.bottomNav.selectedItemId = R.id.nav_search
         ui.videoCard.isVisible = false
+        ui.homeScroll.isVisible = false
         ui.channelBanner.isVisible = true
         ui.channelBannerText.text = getString(R.string.channel_header, channel.name)
         setBusy(true, R.string.loading_channel)
