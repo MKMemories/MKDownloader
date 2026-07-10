@@ -1,5 +1,6 @@
 package com.mkmemories.mkdownloader
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
@@ -10,6 +11,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -28,24 +30,24 @@ import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 
 /**
  * Service de lecture musicale : son en arrière-plan + notification/écran
- * verrouillé, ET bibliothèque parcourable premium pour **Android Auto** —
- * tendances France/US, playlists, favoris, recherche, file d'attente
- * (précédent/suivant), artwork, et bouton « favori » sur l'écran voiture.
+ * verrouillé, ET bibliothèque parcourable premium pour **Android Auto**.
+ *
+ * Résolution PARESSEUSE : les titres portent une URI « ytdlp:<lien> » et le
+ * flux réel n'est extrait qu'au moment où le morceau démarre (ResolvingDataSource).
+ * → démarrage instantané, pas d'attente/erreur, précédent-suivant immédiats.
  */
 @UnstableApi
 class MusicService : MediaLibraryService() {
 
     private var session: MediaLibrarySession? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    // Cache nom-de-liste → morceaux (permet d'étendre un titre tapé à sa file).
+    // Cache nœud → morceaux (permet d'étendre un titre tapé à toute sa file).
     private val browseCache = HashMap<String, List<VideoItem>>()
 
     override fun onCreate() {
@@ -59,8 +61,22 @@ class MusicService : MediaLibraryService() {
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(30_000)
 
+        // Résout « ytdlp:<lien> » → flux audio réel, à la volée (thread de lecture).
+        val resolver = ResolvingDataSource.Resolver { dataSpec ->
+            if (dataSpec.uri.scheme == SCHEME) {
+                val real = dataSpec.uri.schemeSpecificPart
+                val stream = runCatching {
+                    runBlocking { Engine.audioStreamUrl(this@MusicService, real) }
+                }.getOrNull()
+                if (stream != null) dataSpec.withUri(Uri.parse(stream)) else dataSpec
+            } else {
+                dataSpec
+            }
+        }
+        val dataSourceFactory = ResolvingDataSource.Factory(httpFactory, resolver)
+
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -71,8 +87,7 @@ class MusicService : MediaLibraryService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        // Un titre indisponible (premium/bloqué) ne doit pas figer la lecture :
-        // on saute automatiquement au suivant.
+        // Un titre indisponible (premium/bloqué) ne fige pas la lecture : on saute.
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 if (player.hasNextMediaItem()) {
@@ -121,6 +136,10 @@ class MusicService : MediaLibraryService() {
             if (customCommand.customAction == CMD_FAV) {
                 session.player.currentMediaItem?.let {
                     Favorites.toggleVideo(this@MusicService, videoFromMediaItem(it))
+                    browseCache.remove(NODE_FAVORITES)
+                    this@MusicService.session?.notifyChildrenChanged(
+                        NODE_FAVORITES, Favorites.videos(this@MusicService).size, null
+                    )
                 }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
@@ -131,17 +150,13 @@ class MusicService : MediaLibraryService() {
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?,
-        ): ListenableFuture<LibraryResult<MediaItem>> {
-            // Styles de contenu premium : grilles pour les dossiers, listes pour les titres.
-            val extras = Bundle().apply {
-                putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 2) // grille
-                putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)  // liste
-            }
-            val rootParams = LibraryParams.Builder().setExtras(extras).build()
-            return Futures.immediateFuture(
-                LibraryResult.ofItem(browsable(ROOT, this@MusicService.getString(R.string.app_name)), rootParams)
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(
+                LibraryResult.ofItem(
+                    browsable(ROOT, this@MusicService.getString(R.string.app_name)),
+                    listParams(),
+                )
             )
-        }
 
         override fun onGetChildren(
             session: MediaLibrarySession,
@@ -153,7 +168,7 @@ class MusicService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val ctx = this@MusicService
             fun ok(list: List<MediaItem>) =
-                Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), params))
+                Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), listParams()))
             return when {
                 parentId == ROOT -> ok(
                     listOf(
@@ -168,8 +183,8 @@ class MusicService : MediaLibraryService() {
                 parentId == NODE_FAVORITES -> ok(cacheAndBuild(parentId, Favorites.videos(ctx)))
                 parentId.startsWith(PL_PREFIX) ->
                     ok(cacheAndBuild(parentId, Favorites.tracksOf(ctx, parentId.removePrefix(PL_PREFIX))))
-                parentId == NODE_TREND_FR -> asyncChildren(parentId, Q_FR, params)
-                parentId == NODE_TREND_US -> asyncChildren(parentId, Q_US, params)
+                parentId == NODE_TREND_FR -> asyncChildren(parentId, Q_FR)
+                parentId == NODE_TREND_US -> asyncChildren(parentId, Q_US)
                 else -> ok(emptyList())
             }
         }
@@ -202,15 +217,15 @@ class MusicService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val tracks = browseCache[NODE_SEARCH] ?: emptyList()
             return Futures.immediateFuture(
-                LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { playable(it, NODE_SEARCH) }), params)
+                LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { playable(it, NODE_SEARCH) }), listParams())
             )
         }
 
         /**
-         * Le téléphone fournit une file déjà résolue (URI présentes) → tel quel.
-         * La voiture ne tape qu'un titre → on l'étend à sa liste sœur, on résout
-         * tous les flux (en sautant les indisponibles), et on démarre au bon index
-         * pour que précédent/suivant fonctionnent.
+         * Le téléphone fournit des URI http(s) déjà résolues → tel quel. La voiture
+         * ne tape qu'un titre (URI « ytdlp: ») → on l'étend INSTANTANÉMENT à toute
+         * sa liste sœur (aucune extraction ici : elle est paresseuse) et on démarre
+         * au bon index. Résultat : pas d'attente, précédent/suivant OK.
          */
         override fun onSetMediaItems(
             mediaSession: MediaSession,
@@ -219,57 +234,30 @@ class MusicService : MediaLibraryService() {
             startIndex: Int,
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-            if (mediaItems.isNotEmpty() && mediaItems.all { it.localConfiguration != null }) {
+            val first = mediaItems.firstOrNull()
+            if (first?.localConfiguration?.uri?.scheme != SCHEME) {
                 return Futures.immediateFuture(
                     MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs)
                 )
             }
-            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
-            scope.launch {
-                val tapped = mediaItems.firstOrNull()
-                val (parent, url) = parseId(tapped?.mediaId ?: "")
-                val list = browseCache[parent]
-                    ?: listOfNotNull(tapped?.let { videoFromMediaItem(it) })
-                val resolved = withContext(Dispatchers.IO) {
-                    list.map { t -> async { t to Engine.audioStreamUrl(this@MusicService, t.url) } }.awaitAll()
-                }.mapNotNull { (t, s) -> if (s != null) t to s else null }
-                if (resolved.isEmpty()) {
-                    future.set(MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0))
-                    return@launch
-                }
-                val items = resolved.map { (t, s) -> playableResolved(t, parent, s) }
-                val start = resolved.indexOfFirst { it.first.url == url }.coerceAtLeast(0)
-                future.set(MediaSession.MediaItemsWithStartPosition(items, start, startPositionMs))
-            }
-            return future
+            val (parent, url) = parseId(first.mediaId)
+            val list = browseCache[parent]
+                ?: return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(mediaItems, 0, startPositionMs)
+                )
+            val items = list.map { playable(it, parent) }
+            val start = list.indexOfFirst { it.url == url }.coerceAtLeast(0)
+            return Futures.immediateFuture(
+                MediaSession.MediaItemsWithStartPosition(items, start, startPositionMs)
+            )
         }
 
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>,
-        ): ListenableFuture<MutableList<MediaItem>> {
-            if (mediaItems.all { it.localConfiguration != null }) {
-                return Futures.immediateFuture(mediaItems)
-            }
-            val future = SettableFuture.create<MutableList<MediaItem>>()
-            scope.launch {
-                val resolved = withContext(Dispatchers.IO) {
-                    mediaItems.map { item ->
-                        async {
-                            if (item.localConfiguration != null) item
-                            else {
-                                val (_, url) = parseId(item.mediaId)
-                                val s = runCatching { Engine.audioStreamUrl(this@MusicService, url) }.getOrNull()
-                                if (s != null) item.buildUpon().setUri(s).build() else null
-                            }
-                        }
-                    }.awaitAll()
-                }.filterNotNull().toMutableList()
-                future.set(resolved)
-            }
-            return future
-        }
+        ): ListenableFuture<MutableList<MediaItem>> =
+            Futures.immediateFuture(mediaItems)
     }
 
     private fun cacheAndBuild(parentId: String, tracks: List<VideoItem>): List<MediaItem> {
@@ -280,11 +268,10 @@ class MusicService : MediaLibraryService() {
     private fun asyncChildren(
         parentId: String,
         query: String,
-        params: LibraryParams?,
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
         browseCache[parentId]?.let {
             return Futures.immediateFuture(
-                LibraryResult.ofItemList(ImmutableList.copyOf(it.map { t -> playable(t, parentId) }), params)
+                LibraryResult.ofItemList(ImmutableList.copyOf(it.map { t -> playable(t, parentId) }), listParams())
             )
         }
         val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
@@ -294,10 +281,19 @@ class MusicService : MediaLibraryService() {
             }.getOrDefault(emptyList())
             browseCache[parentId] = tracks
             future.set(
-                LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { playable(it, parentId) }), params)
+                LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { playable(t = it, parent = parentId) }), listParams())
             )
         }
         return future
+    }
+
+    /** Force un affichage en LISTE compacte (épuré, sans « gros pavés »). */
+    private fun listParams(): LibraryParams =
+        LibraryParams.Builder().setExtras(contentStyleExtras()).build()
+
+    private fun contentStyleExtras() = Bundle().apply {
+        putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 1) // liste
+        putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)  // liste
     }
 
     private fun favButton(): CommandButton =
@@ -316,6 +312,7 @@ class MusicService : MediaLibraryService() {
                     .setIsBrowsable(true)
                     .setIsPlayable(false)
                     .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+                    .setExtras(contentStyleExtras())
                     .build()
             )
             .build()
@@ -323,24 +320,17 @@ class MusicService : MediaLibraryService() {
     private fun playable(t: VideoItem, parent: String): MediaItem =
         MediaItem.Builder()
             .setMediaId(trackId(parent, t.url))
-            .setMediaMetadata(trackMeta(t))
-            .build()
-
-    private fun playableResolved(t: VideoItem, parent: String, stream: String): MediaItem =
-        MediaItem.Builder()
-            .setMediaId(trackId(parent, t.url))
-            .setUri(stream)
-            .setMediaMetadata(trackMeta(t))
-            .build()
-
-    private fun trackMeta(t: VideoItem): MediaMetadata =
-        MediaMetadata.Builder()
-            .setTitle(t.title)
-            .setArtist(t.uploader ?: t.channelName)
-            .setIsBrowsable(false)
-            .setIsPlayable(true)
-            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-            .apply { t.thumbnail?.let { setArtworkUri(it.toUri()) } }
+            .setUri(SCHEME + ":" + t.url) // résolu paresseusement par le ResolvingDataSource
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(t.title)
+                    .setArtist(t.uploader ?: t.channelName)
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                    .apply { t.thumbnail?.let { setArtworkUri(it.toUri()) } }
+                    .build()
+            )
             .build()
 
     private fun videoFromMediaItem(mi: MediaItem): VideoItem {
@@ -376,6 +366,7 @@ class MusicService : MediaLibraryService() {
         private const val PL_PREFIX = "pl:"
         private const val CMD_FAV = "com.mkmemories.mkdownloader.FAV"
         private const val SEP = "::mk::"
+        private const val SCHEME = "ytdlp"
         private const val Q_FR = "top chansons françaises du moment 2026"
         private const val Q_US = "top songs usa billboard hits 2026"
     }
