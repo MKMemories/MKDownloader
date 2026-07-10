@@ -446,5 +446,10 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         if (!isChangingConfigurations) finish()
     }
 
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(R.anim.hold, R.anim.slide_out_down)
+    }
+
     private fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_LONG).show()
 }

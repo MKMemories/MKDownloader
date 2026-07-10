@@ -1,5 +1,7 @@
 package com.mkmemories.mkdownloader
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
@@ -54,6 +56,8 @@ class MainActivity : AppCompatActivity() {
     private var lastQuery: String = ""
     private var busy = false
     private val suggestJobs = HashMap<Int, Job>()
+    private var skeletonPulse: ObjectAnimator? = null
+    private var wasDownloading = false
 
     // Mini-lecteur : contrôleur média branché sur le service musical.
     private var miniControllerFuture: ListenableFuture<MediaController>? = null
@@ -470,6 +474,25 @@ class MainActivity : AppCompatActivity() {
         ui.searchProgress.isVisible = value
         ui.searchStatus.isVisible = value && statusRes != null
         statusRes?.let { ui.searchStatus.text = getString(it) }
+        setSkeleton(value)
+    }
+
+    /** Squelette pulsant : occupe l'écran pendant que la recherche charge. */
+    private fun setSkeleton(show: Boolean) {
+        ui.searchSkeleton.isVisible = show
+        if (show) {
+            if (skeletonPulse == null) {
+                skeletonPulse = ObjectAnimator.ofFloat(ui.searchSkeleton, "alpha", 1f, 0.4f).apply {
+                    duration = 750
+                    repeatMode = ValueAnimator.REVERSE
+                    repeatCount = ValueAnimator.INFINITE
+                }
+            }
+            skeletonPulse?.takeIf { !it.isStarted }?.start()
+        } else {
+            skeletonPulse?.cancel()
+            ui.searchSkeleton.alpha = 1f
+        }
     }
 
     private fun analyzeUrl(url: String) {
@@ -770,6 +793,7 @@ class MainActivity : AppCompatActivity() {
         MusicQueue.startIndex = startIndex
         MusicQueue.playlistName = playlistName
         startActivity(Intent(this, MusicPlayerActivity::class.java))
+        overridePendingTransition(R.anim.slide_in_up, R.anim.hold)
     }
 
     // ---------- FAVORIS ----------
@@ -835,6 +859,7 @@ class MainActivity : AppCompatActivity() {
             putExtra(PlayerActivity.EXTRA_URL, item.url)
             putExtra(PlayerActivity.EXTRA_TITLE, item.title)
         })
+        overridePendingTransition(R.anim.slide_in_up, R.anim.hold)
     }
 
     private fun askQualityAndDownload(item: VideoItem) {
@@ -868,6 +893,15 @@ class MainActivity : AppCompatActivity() {
         } else {
             ui.downloadStatus.text = state.message ?: state.error
         }
+        // Rebond de célébration quand un téléchargement vient de se terminer.
+        if (wasDownloading && !state.running && state.error == null) {
+            ui.downloadCard.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+            ui.downloadCard.animate().scaleX(1.03f).scaleY(1.03f).setDuration(130)
+                .withEndAction {
+                    ui.downloadCard.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
+                }.start()
+        }
+        wasDownloading = state.running
     }
 
     // ---------- HISTORIQUE ----------

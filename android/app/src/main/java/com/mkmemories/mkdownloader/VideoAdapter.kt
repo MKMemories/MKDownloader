@@ -45,7 +45,18 @@ class VideoAdapter(
                 if (isFav(item)) android.R.drawable.btn_star_big_on
                 else android.R.drawable.btn_star_big_off
             )
-            favButton.setOnClickListener { onToggleFav(item); notifyItemChanged(position) }
+            favButton.setOnClickListener { v ->
+                onToggleFav(item)
+                favButton.setIconResource(
+                    if (isFav(item)) android.R.drawable.btn_star_big_on
+                    else android.R.drawable.btn_star_big_off
+                )
+                // Rebond premium sur l'étoile.
+                v.animate().scaleX(1.4f).scaleY(1.4f).setDuration(110)
+                    .withEndAction {
+                        v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+                    }.start()
+            }
             moreButton.setOnClickListener { onMore(item, it) }
             root.setOnClickListener { onPlay(item) }
         }

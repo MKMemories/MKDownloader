@@ -469,7 +469,15 @@ class MusicPlayerActivity : AppCompatActivity() {
         val t = currentTrack() ?: run { toast(getString(R.string.no_audio)); return }
         val added = Favorites.toggleVideo(this, t)
         updateFavIcon()
+        ui.favButton.animate().scaleX(1.4f).scaleY(1.4f).setDuration(110)
+            .withEndAction { ui.favButton.animate().scaleX(1f).scaleY(1f).setDuration(150).start() }
+            .start()
         toast(getString(if (added) R.string.fav_added else R.string.fav_removed))
+    }
+
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(R.anim.hold, R.anim.slide_out_down)
     }
 
     private fun updateFavIcon() {

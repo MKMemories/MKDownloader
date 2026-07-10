@@ -139,6 +139,22 @@
                 android:textSize="13sp"
                 android:visibility="gone" />
 
+            <!-- Squelette de chargement : pulse pendant la recherche. -->
+            <LinearLayout
+                android:id="@+id/searchSkeleton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <include layout="@layout/item_skeleton" />
+
+                <include layout="@layout/item_skeleton" />
+
+                <include layout="@layout/item_skeleton" />
+            </LinearLayout>
+
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/videoCard"
                 android:layout_width="match_parent"
