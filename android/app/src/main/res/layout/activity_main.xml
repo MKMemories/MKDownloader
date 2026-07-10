@@ -468,94 +468,7 @@
                 android:paddingBottom="8dp" />
         </LinearLayout>
 
-        <!-- ============ DIRECT TV ============ -->
-        <LinearLayout
-            android:id="@+id/tvPane"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/tv_header"
-                    android:textColor="@color/text"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/tvAccounts"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="0dp"
-                    android:paddingHorizontal="12dp"
-                    android:text="@string/tv_accounts" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="@string/tv_subtitle"
-                android:textColor="@color/text_dim"
-                android:textSize="12sp" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:hint="@string/tv_filter_hint"
-                app:boxBackgroundColor="@color/card"
-                app:hintTextColor="@color/text_dim">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/tvFilter"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="text"
-                    android:maxLines="1"
-                    android:textColor="@color/text" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.progressindicator.LinearProgressIndicator
-                android:id="@+id/tvProgress"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:indeterminate="true"
-                android:visibility="gone"
-                app:trackCornerRadius="6dp" />
-
-            <TextView
-                android:id="@+id/tvStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="40dp"
-                android:gravity="center"
-                android:textColor="@color/text_dim"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/tvList"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="10dp"
-                android:layout_weight="1"
-                android:clipToPadding="false"
-                android:paddingBottom="8dp" />
-        </LinearLayout>
-
-        <!-- ============ CINÉMA ============ -->
+        <!-- ============ CINÉMA & DIRECT TV ============ -->
         <LinearLayout
             android:id="@+id/cinemaPane"
             android:layout_width="match_parent"
@@ -564,23 +477,47 @@
             android:padding="12dp"
             android:visibility="gone">
 
-            <TextView
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/watchToggle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:text="@string/cinema_header"
-                android:textColor="@color/text"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                app:selectionRequired="true"
+                app:singleSelection="true">
 
-            <TextView
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/watchFilms"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/watch_films" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/watchTv"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/watch_tv" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- Films libres de droits -->
+            <LinearLayout
+                android:id="@+id/cinemaFilmsBox"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginBottom="4dp"
-                android:text="@string/cinema_subtitle"
-                android:textColor="@color/text_dim"
-                android:textSize="12sp" />
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/cinema_subtitle"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp" />
 
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/cinemaLangChips"
@@ -655,6 +592,79 @@
                 android:layout_weight="1"
                 android:clipToPadding="false"
                 android:paddingBottom="8dp" />
+            </LinearLayout>
+
+            <!-- Direct TV (chaînes YouTube en direct) -->
+            <LinearLayout
+                android:id="@+id/cinemaTvBox"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/tv_subtitle"
+                    android:textColor="@color/text_dim"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:hint="@string/tv_filter_hint"
+                    app:boxBackgroundColor="@color/card"
+                    app:hintTextColor="@color/text_dim">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/tvFilter"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:maxLines="1"
+                        android:textColor="@color/text" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/tvProgress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    app:trackCornerRadius="6dp" />
+
+                <TextView
+                    android:id="@+id/tvStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="40dp"
+                    android:gravity="center"
+                    android:textColor="@color/text_dim"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/tvList"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_weight="1"
+                    android:clipToPadding="false"
+                    android:paddingBottom="8dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/tvAccounts"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:text="@string/tv_accounts"
+                    android:textColor="@color/text_dim"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- ============ FAVORIS ============ -->
@@ -989,7 +999,7 @@
         app:itemIconSize="26dp"
         app:itemIconTint="@color/nav_item"
         app:itemTextColor="@color/nav_item"
-        app:labelVisibilityMode="selected"
+        app:labelVisibilityMode="labeled"
         app:menu="@menu/bottom_nav" />
     </LinearLayout>
 </FrameLayout>

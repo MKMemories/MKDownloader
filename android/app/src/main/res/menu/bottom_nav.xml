@@ -13,10 +13,6 @@
         android:icon="@drawable/ic_tab_cinema"
         android:title="@string/tab_cinema" />
     <item
-        android:id="@+id/nav_tv"
-        android:icon="@drawable/ic_tab_tv"
-        android:title="@string/tab_tv" />
-    <item
         android:id="@+id/nav_favorites"
         android:icon="@drawable/ic_tab_fav"
         android:title="@string/tab_favorites" />

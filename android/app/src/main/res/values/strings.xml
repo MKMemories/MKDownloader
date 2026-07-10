@@ -18,6 +18,8 @@
     <string name="cinema_error">Impossible de charger la bibliothèque. Vérifiez la connexion et réessayez.</string>
     <string name="cinema_watch">Regarder le film</string>
     <string name="cinema_download">Télécharger</string>
+    <string name="watch_films">🎬 Films</string>
+    <string name="watch_tv">📺 Direct TV</string>
 
     <!-- Direct TV -->
     <string name="tv">Chaîne TV</string>

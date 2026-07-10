@@ -326,12 +326,10 @@ class MainActivity : AppCompatActivity() {
         ui.searchPane.isVisible = itemId == R.id.nav_search
         ui.musicPane.isVisible = itemId == R.id.nav_music
         ui.cinemaPane.isVisible = itemId == R.id.nav_cinema
-        ui.tvPane.isVisible = itemId == R.id.nav_tv
         ui.favoritesPane.isVisible = itemId == R.id.nav_favorites
         ui.historyPane.isVisible = itemId == R.id.nav_history
         when (itemId) {
-            R.id.nav_tv -> loadTv()
-            R.id.nav_cinema -> if (!cinemaLoaded) loadCinema()
+            R.id.nav_cinema -> if (!cinemaLoaded && ui.watchFilms.isChecked) loadCinema()
             R.id.nav_music -> {
                 refreshPlaylists()
                 // Report de la recherche : bascule sans retaper la même requête.
@@ -472,6 +470,17 @@ class MainActivity : AppCompatActivity() {
     // ---------- CINÉMA ----------
 
     private fun wireCinema() {
+        // Bascule Films / Direct TV : le même onglet couvre les deux modes.
+        ui.watchToggle.check(R.id.watchFilms)
+        ui.watchToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            hapticTick()
+            val films = checkedId == R.id.watchFilms
+            ui.cinemaFilmsBox.isVisible = films
+            ui.cinemaTvBox.isVisible = !films
+            if (films) { if (!cinemaLoaded) loadCinema() } else loadTv()
+        }
+
         // Langues : multi-sélection, au moins une reste toujours active.
         Cinema.Lang.values().forEach { lang ->
             ui.cinemaLangChips.addView(Chip(this).apply {
