@@ -17,14 +17,39 @@ import yt_dlp
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.join(_PROJECT_ROOT, "data"))
-COOKIES_FILE = os.environ.get("COOKIES_FILE", os.path.join(_PROJECT_ROOT, "cookies.txt"))
-# COOKIES_CONTENT permet de fournir les cookies via un secret d'environnement
-# (pratique sur Hugging Face/Render, où monter un fichier est compliqué).
-if os.environ.get("COOKIES_CONTENT") and not os.path.exists(COOKIES_FILE):
+def _normalize_cookies(text: str) -> str:
+    """Reconstruit des tabulations si l'hébergeur a remplacé les TAB par des
+    espaces (sinon yt-dlp rejette le fichier « not a Netscape format »)."""
+    lines = []
+    for raw in text.replace("\r\n", "\n").split("\n"):
+        s = raw.rstrip()
+        if not s.strip() or s.lstrip().startswith("#") or "\t" in s:
+            lines.append(s)
+            continue
+        # Netscape = 7 champs : domain flag path secure expiry name value.
+        parts = s.split(None, 6)
+        lines.append("\t".join(parts) if len(parts) == 7 else s)
+    return "\n".join(lines).strip() + "\n"
+
+
+# Cookies : 1) chemin explicite ou fichier secret (Render monte les Secret Files
+# dans /etc/secrets/), 2) sinon contenu fourni via la variable COOKIES_CONTENT.
+COOKIES_FILE = ""
+for _candidate in (
+    os.environ.get("COOKIES_FILE", ""),
+    "/etc/secrets/cookies.txt",
+    os.path.join(_PROJECT_ROOT, "cookies.txt"),
+):
+    if _candidate and os.path.exists(_candidate):
+        COOKIES_FILE = _candidate
+        break
+if not COOKIES_FILE and os.environ.get("COOKIES_CONTENT"):
     COOKIES_FILE = os.path.join(tempfile.gettempdir(), "mkdl-cookies.txt")
     with open(COOKIES_FILE, "w", encoding="utf-8") as _fh:
-        _fh.write(os.environ["COOKIES_CONTENT"])
+        _fh.write(_normalize_cookies(os.environ["COOKIES_CONTENT"]))
     os.chmod(COOKIES_FILE, 0o600)
+
+COOKIES_ACTIVE = bool(COOKIES_FILE and os.path.exists(COOKIES_FILE))
 # Durée de conservation des fichiers téléchargés avant purge automatique.
 RETENTION_MINUTES = int(os.environ.get("RETENTION_MINUTES", "180"))
 MAX_CONCURRENT_JOBS = int(os.environ.get("MAX_CONCURRENT_JOBS", "3"))
@@ -93,10 +118,18 @@ def _clean_error(message: str) -> str:
     message = _ANSI_RE.sub("", message)
     message = re.sub(r"^ERROR:\s*", "", message).strip()
     lowered = message.lower()
-    if "login required" in lowered or "cookies" in lowered or "rate-limit" in lowered:
+    etat = "actifs ✅" if COOKIES_ACTIVE else "absents ❌"
+    if "not a bot" in lowered or "sign in to confirm" in lowered or "confirm you" in lowered:
         return (
-            "Cette vidéo demande une connexion (contenu privé ou limité). "
-            "Ajoutez un fichier cookies.txt — voir le README, section « Contenus privés »."
+            f"YouTube bloque ce serveur (vérification anti-robot des IP d'hébergement). "
+            f"Cookies {etat}. Depuis un hébergement cloud, ce blocage peut persister malgré "
+            f"les cookies. Solutions : réessayer plus tard, rafraîchir les cookies, ou héberger "
+            f"sur une IP résidentielle (PC/box à la maison)."
+        )
+    if "login required" in lowered or "cookies" in lowered or "rate-limit" in lowered or "private" in lowered:
+        return (
+            f"Cette vidéo demande une connexion (contenu privé ou limité). Cookies {etat}. "
+            f"Si le problème persiste alors que les cookies sont actifs, rafraîchissez-les (ils expirent)."
         )
     if "unsupported url" in lowered:
         return "Ce lien n'est pas pris en charge. Collez l'URL directe de la vidéo."
