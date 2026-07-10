@@ -27,7 +27,9 @@
     <string name="cinema_watch">Regarder le film</string>
     <string name="cinema_download">Télécharger</string>
     <string name="watch_films">🎬 Films</string>
+    <string name="watch_trailers">🎞️ Sorties</string>
     <string name="watch_tv">📺 Direct TV</string>
+    <string name="trailers_subtitle">Dernières bandes-annonces &amp; sorties ciné (YouTube).</string>
 
     <!-- Direct TV -->
     <string name="tv">Chaîne TV</string>

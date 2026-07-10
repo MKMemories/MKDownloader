@@ -62,6 +62,9 @@ class MainActivity : AppCompatActivity() {
     private var cinemaSort = Cinema.SortBy.POPULAR
     private var cinemaLoaded = false
 
+    private lateinit var trailers: VideoAdapter
+    private var trailersLoaded = false
+
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
     private var sourceFilter: String = "Tout"
@@ -420,6 +423,15 @@ class MainActivity : AppCompatActivity() {
         ui.cinemaList.layoutManager = GridLayoutManager(this, 3)
         ui.cinemaList.adapter = cinema
 
+        trailers = VideoAdapter(
+            isFav = { Favorites.isVideoFav(this, it.url) },
+            onPlay = ::openPlayer,
+            onToggleFav = { hapticTick(); Favorites.toggleVideo(this, it) },
+            onMore = ::showVideoMenu,
+        )
+        ui.trailersList.layoutManager = LinearLayoutManager(this)
+        ui.trailersList.adapter = trailers
+
         resumeRow = CarouselAdapter(onPlay = ::openPlayer)
         ui.resumeRow.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         ui.resumeRow.adapter = resumeRow
@@ -493,10 +505,14 @@ class MainActivity : AppCompatActivity() {
         ui.watchToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             hapticTick()
-            val films = checkedId == R.id.watchFilms
-            ui.cinemaFilmsBox.isVisible = films
-            ui.cinemaTvBox.isVisible = !films
-            if (films) { if (!cinemaLoaded) loadCinema() } else loadTv()
+            ui.cinemaFilmsBox.isVisible = checkedId == R.id.watchFilms
+            ui.cinemaTrailersBox.isVisible = checkedId == R.id.watchTrailers
+            ui.cinemaTvBox.isVisible = checkedId == R.id.watchTv
+            when (checkedId) {
+                R.id.watchFilms -> if (!cinemaLoaded) loadCinema()
+                R.id.watchTrailers -> if (!trailersLoaded) loadTrailers()
+                R.id.watchTv -> loadTv()
+            }
         }
 
         // Langues : multi-sélection, au moins une reste toujours active.
@@ -570,6 +586,40 @@ class MainActivity : AppCompatActivity() {
         ui.cinemaStatus.text = msg
         ui.cinemaStatus.isVisible = true
         ui.cinemaList.isVisible = false
+    }
+
+    /**
+     * Sorties ciné & bandes-annonces : dernières bandes-annonces d'AlloCiné
+     * (agrégateur) + une recherche fraîche, jouables/téléchargeables comme
+     * n'importe quelle vidéo. Aucune clé d'API requise.
+     */
+    private fun loadTrailers() {
+        trailersLoaded = true
+        trailers.submit(emptyList())
+        ui.trailersStatus.isVisible = false
+        ui.trailersProgress.isVisible = true
+        lifecycleScope.launch {
+            val lists = listOf(
+                async {
+                    runCatching {
+                        Engine.channelVideos(this@MainActivity, "https://www.youtube.com/@AlloCine", 20)
+                    }.getOrDefault(emptyList())
+                },
+                async {
+                    runCatching {
+                        Engine.search(this@MainActivity, "bande annonce officielle VF", DateFilter.MONTH, 15)
+                    }.getOrDefault(emptyList())
+                },
+            ).awaitAll()
+            val vids = interleave(lists)
+            ui.trailersProgress.isVisible = false
+            trailers.submit(vids)
+            ui.trailersList.isVisible = vids.isNotEmpty()
+            if (vids.isEmpty()) {
+                ui.trailersStatus.text = getString(R.string.cinema_error)
+                ui.trailersStatus.isVisible = true
+            }
+        }
     }
 
     /** Ouvre un film : lecture (plein écran + qualité) ou téléchargement. */
