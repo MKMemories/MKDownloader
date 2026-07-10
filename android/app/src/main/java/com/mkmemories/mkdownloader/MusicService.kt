@@ -123,6 +123,12 @@ class MusicService : MediaLibraryService() {
                     player.play()
                 }
             }
+
+            // Mémorise chaque écoute pour « Reprendre / Récents ».
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                mediaItem ?: return
+                runCatching { Recents.add(this@MusicService, videoFromMediaItem(mediaItem)) }
+            }
         })
         equalizer = runCatching {
             val sid = player.audioSessionId
@@ -231,6 +237,7 @@ class MusicService : MediaLibraryService() {
             return when {
                 parentId == ROOT -> ok(
                     listOf(
+                        browsable(NODE_RECENT, ctx.getString(R.string.home_resume)),
                         browsable(NODE_DOWNLOADS, ctx.getString(R.string.tab_library)),
                         browsable(NODE_RADIOS, ctx.getString(R.string.music_radios)),
                         browsable(NODE_TREND_FR, "Populaire · France"),
@@ -240,6 +247,7 @@ class MusicService : MediaLibraryService() {
                     )
                 )
                 parentId == NODE_RADIOS -> ok(cacheAndBuild(parentId, Radio.stations()))
+                parentId == NODE_RECENT -> ok(cacheAndBuild(parentId, Recents.list(ctx)))
                 parentId == NODE_DOWNLOADS -> ok(cacheAndBuild(parentId, OfflineLibrary.audioTracks(ctx)))
                 parentId == NODE_PLAYLISTS ->
                     ok(Favorites.playlistNames(ctx).map { browsable(PL_PREFIX + it, it) })
@@ -298,6 +306,26 @@ class MusicService : MediaLibraryService() {
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val first = mediaItems.firstOrNull()
+
+            // Commande vocale (« OK Google, mets X sur MKDownloader ») : l'Assistant
+            // envoie une requête de recherche sans URI → on résout via la recherche.
+            val voiceQuery = first?.requestMetadata?.searchQuery?.toString()?.trim()
+            if (!voiceQuery.isNullOrEmpty() && first?.localConfiguration == null) {
+                val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+                scope.launch {
+                    val tracks = runCatching {
+                        Engine.searchMusic(this@MusicService, voiceQuery, 30)
+                    }.getOrDefault(emptyList())
+                    if (tracks.isEmpty()) {
+                        future.set(MediaSession.MediaItemsWithStartPosition(mediaItems, 0, startPositionMs))
+                    } else {
+                        val built = cacheAndBuild(NODE_VOICE, tracks)
+                        future.set(MediaSession.MediaItemsWithStartPosition(built, 0, 0))
+                    }
+                }
+                return future
+            }
+
             // Items « voiture » : identifiés par leur mediaId de navigation → on
             // reconstruit la liste sœur depuis le cache (radios incluses). Les items
             // « téléphone » (déjà porteurs de l'URL réelle) passent tels quels.
@@ -428,6 +456,8 @@ class MusicService : MediaLibraryService() {
         private const val NODE_FAVORITES = "favorites"
         private const val NODE_RADIOS = "radios"
         private const val NODE_DOWNLOADS = "downloads"
+        private const val NODE_RECENT = "recent"
+        private const val NODE_VOICE = "voice"
         private const val NODE_SEARCH = "search"
         private const val PL_PREFIX = "pl:"
         private const val CMD_FAV = "com.mkmemories.mkdownloader.FAV"

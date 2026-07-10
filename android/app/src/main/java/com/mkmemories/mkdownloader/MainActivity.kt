@@ -860,11 +860,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Radio artiste : lance une station quasi infinie autour de l'artiste/du titre. */
+    private fun artistRadio(item: VideoItem) {
+        val seed = (item.channelName ?: item.uploader ?: item.title).trim().ifEmpty { item.title }
+        toast(getString(R.string.artist_radio_starting, seed))
+        lifecycleScope.launch {
+            val tracks = runCatching { Engine.searchMusic(this@MainActivity, "$seed mix", 40) }
+                .getOrDefault(emptyList())
+            if (tracks.isEmpty()) toast(getString(R.string.no_results))
+            else openMusic(tracks, 0)
+        }
+    }
+
     /** Menu ⋮ d'une vidéo : lecture, téléchargements, playlist, chaîne. */
     private fun showVideoMenu(item: VideoItem, anchor: View) {
         PopupMenu(this, anchor).apply {
             menu.add(R.string.menu_play).setOnMenuItemClickListener { openPlayer(item); true }
             menu.add(R.string.menu_listen).setOnMenuItemClickListener { openMusic(listOf(item), 0); true }
+            menu.add(R.string.menu_artist_radio).setOnMenuItemClickListener { artistRadio(item); true }
             menu.add(R.string.menu_download_video).setOnMenuItemClickListener { askQualityAndDownload(item); true }
             menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
             menu.add(R.string.menu_download_channel).setOnMenuItemClickListener { downloadChannel(item); true }
@@ -878,6 +891,7 @@ class MainActivity : AppCompatActivity() {
     private fun showTrackMenu(item: VideoItem, anchor: View) {
         PopupMenu(this, anchor).apply {
             menu.add(R.string.menu_listen).setOnMenuItemClickListener { openMusic(listOf(item), 0); true }
+            menu.add(R.string.menu_artist_radio).setOnMenuItemClickListener { artistRadio(item); true }
             menu.add(R.string.menu_play).setOnMenuItemClickListener { openPlayer(item); true }
             menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
             menu.add(R.string.add_to_playlist).setOnMenuItemClickListener { choosePlaylist(item); true }
