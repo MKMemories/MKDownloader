@@ -2,6 +2,8 @@ package com.mkmemories.mkdownloader
 
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -49,6 +51,27 @@ class MusicService : MediaLibraryService() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     // Cache nœud → morceaux (permet d'étendre un titre tapé à toute sa file).
     private val browseCache = HashMap<String, List<VideoItem>>()
+
+    // Anti-blocage : un titre premium/indisponible reste parfois « en tampon »
+    // à 0:00 sans erreur. Au bout de ~15 s on saute au suivant.
+    private val watchdog = Handler(Looper.getMainLooper())
+    private var stallTicks = 0
+    private val watchdogRun = object : Runnable {
+        override fun run() {
+            val p = session?.player
+            if (p != null && p.playWhenReady &&
+                p.playbackState == Player.STATE_BUFFERING && p.currentPosition == 0L
+            ) {
+                stallTicks++
+                if (stallTicks >= 5 && p.hasNextMediaItem()) {
+                    p.seekToNextMediaItem(); p.prepare(); p.play(); stallTicks = 0
+                }
+            } else {
+                stallTicks = 0
+            }
+            watchdog.postDelayed(this, 3000)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -98,11 +121,13 @@ class MusicService : MediaLibraryService() {
             }
         })
         session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
+        watchdog.post(watchdogRun)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        watchdog.removeCallbacks(watchdogRun)
         session?.run { player.release(); release() }
         session = null
         scope.cancel()

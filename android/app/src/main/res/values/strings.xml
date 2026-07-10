@@ -100,6 +100,8 @@
     <string name="delete_playlist">Supprimer la playlist</string>
     <string name="delete_playlist_msg">Supprimer la playlist « %1$s » ? (les fichiers déjà téléchargés sont conservés)</string>
     <string name="no_audio">Aucun flux audio lisible.</string>
+    <string name="premium_skipped">Titre indisponible (premium) ignoré ⏭</string>
+    <string name="premium_unavailable">Titre indisponible (premium).</string>
 
     <!-- Favoris -->
     <string name="fav_channels">Chaînes</string>

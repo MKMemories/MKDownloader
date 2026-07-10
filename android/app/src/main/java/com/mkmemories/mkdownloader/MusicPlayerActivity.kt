@@ -65,6 +65,9 @@ class MusicPlayerActivity : AppCompatActivity() {
     private var lyricsLoadedFor: String? = null
     private var lastLyricIndex = -1
 
+    // Anti-blocage : temps passé « en tampon » à 0:00 (titre premium/bloqué).
+    private var stallMs = 0L
+
     // Minuteur de sommeil
     private var sleepActive = false
     private val sleepRunnable = Runnable {
@@ -288,6 +291,37 @@ class MusicPlayerActivity : AppCompatActivity() {
             ui.durTime.text = formatMs(dur)
         }
         updateLyrics(c.currentPosition)
+        checkStall(c)
+    }
+
+    /**
+     * Détecte un titre qui reste bloqué « en tampon » à 0:00 (premium/indisponible)
+     * : on le saute et on le retire définitivement de la playlist importée.
+     */
+    private fun checkStall(c: MediaController) {
+        val stuck = c.playWhenReady && c.playbackState == Player.STATE_BUFFERING && c.currentPosition == 0L
+        if (stuck) {
+            stallMs += 500
+            if (stallMs >= 10_000) { stallMs = 0; skipBrokenTrack() }
+        } else {
+            stallMs = 0
+        }
+    }
+
+    private fun skipBrokenTrack() {
+        val c = controller ?: return
+        val idx = c.currentMediaItemIndex
+        val broken = queue.getOrNull(idx)
+        broken?.let { b ->
+            MusicQueue.playlistName?.let { Favorites.removeFromPlaylist(this, it, b.url) }
+        }
+        if (c.mediaItemCount > 1) {
+            c.removeMediaItem(idx)
+            queue = queue.toMutableList().also { if (idx in it.indices) it.removeAt(idx) }
+            toast(getString(R.string.premium_skipped))
+        } else {
+            toast(getString(R.string.premium_unavailable))
+        }
     }
 
     // ---------- Paroles synchronisées ----------
