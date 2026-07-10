@@ -118,7 +118,6 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         live = intent.getBooleanExtra(EXTRA_LIVE, false)
 
         ui.clipRange.values = listOf(0f, 100f) // valeurs initiales (requis par RangeSlider)
-        ui.playerTitle.text = videoTitle
         ui.panelTitle.text = videoTitle
         ui.closeButton.setOnClickListener { finish() }
         ui.fullscreenButton.setOnClickListener { if (fullscreen) exitFullscreen() else enterFullscreen() }

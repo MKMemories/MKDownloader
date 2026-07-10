@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg"
+    android:background="@drawable/player_bg"
     android:orientation="vertical">
 
     <!-- Cadre vidéo premium (hauteur ajustée en 16:9 en portrait, plein écran en paysage) -->
@@ -42,16 +42,10 @@
                 app:icon="@android:drawable/ic_menu_close_clear_cancel"
                 app:iconTint="#FFFFFF" />
 
-            <TextView
-                android:id="@+id/playerTitle"
+            <View
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/speedButton"
@@ -121,12 +115,22 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="16dp">
+        android:clipToPadding="false"
+        android:padding="12dp"
+        android:scrollbars="none">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="18dp">
 
             <TextView
                 android:id="@+id/panelTitle"
@@ -228,5 +232,6 @@
                 app:icon="@android:drawable/ic_menu_save"
                 android:text="@string/download_clip" />
         </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
     </ScrollView>
 </LinearLayout>
