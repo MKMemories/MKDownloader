@@ -72,6 +72,31 @@ object Cinema {
         "matroska", "webm", "quicktime", "divx", "cinepack", "mp4",
     )
 
+    // Termes de filtrage adulte : on exclut le contenu érotique / nudiste.
+    // Utilisés au niveau de la requête (NOT) ET côté app (double sécurité).
+    private val ADULT_QUERY_TERMS = listOf(
+        "nudist", "nudism", "naturist", "erotic", "erotica", "sexploitation",
+        "nudie", "pornographic", "pornography", "striptease",
+    )
+
+    // Recherche par frontière de mot pour éviter les faux positifs (ex. « Middlesex »).
+    private val ADULT_REGEX = Regex(
+        "\\b(" + listOf(
+            "nudist", "nudists", "nudism", "naturist", "naturism",
+            "erotic", "erotica", "eroticism", "sexploitation",
+            "nudie", "nudies", "pornographic", "pornography", "porno", "porn",
+            "striptease", "stripper", "hardcore", "softcore", "smut",
+            "xxx", "fetish", "orgy", "orgies", "nude", "nudity",
+            "erotique", "erotiques", "nudiste", "nudistes", "pornographique",
+        ).joinToString("|") + ")\\b",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private fun isAdult(title: String, subjects: List<String>): Boolean {
+        val haystack = (title + " " + subjects.joinToString(" "))
+        return ADULT_REGEX.containsMatchIn(haystack)
+    }
+
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
     private fun langClause(langs: Set<Lang>): String {
@@ -103,6 +128,10 @@ object Cinema {
         if (decade.from != null && decade.to != null) {
             clauses += "year:[${decade.from} TO ${decade.to}]"
         }
+        // Exclut le contenu adulte directement dans la requête.
+        clauses += "NOT (" + ADULT_QUERY_TERMS.joinToString(" OR ") {
+            "subject:(\"$it\") OR title:(\"$it\")"
+        } + ")"
         val q = clauses.joinToString(" AND ")
         val url = buildString {
             append("https://archive.org/advancedsearch.php?q=").append(enc(q))
@@ -172,12 +201,15 @@ object Cinema {
             if (!hasPlayableVideo(asList(d, "format"))) continue
             val languages = asList(d, "language")
             if (!matchesLang(languages, langs)) continue
+            val subjects = asList(d, "subject")
+            // Sécurité côté app : on écarte tout contenu érotique / nudiste.
+            if (isAdult(title, subjects)) continue
             val year = when (val y = d.opt("year")) {
                 is Number -> y.toInt()
                 is String -> Regex("\\d{4}").find(y)?.value?.toIntOrNull()
                 else -> null
             }
-            val genres = asList(d, "subject")
+            val genres = subjects
                 .flatMap { it.split(";", ",") }
                 .map { it.trim() }
                 .filter { it.isNotEmpty() && it.length <= 24 }
