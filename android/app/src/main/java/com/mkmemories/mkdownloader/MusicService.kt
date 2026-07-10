@@ -232,32 +232,25 @@ class MusicService : MediaLibraryService() {
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val ctx = this@MusicService
-            fun ok(list: List<MediaItem>) =
+            fun okItems(list: List<MediaItem>) =
                 Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), listParams()))
+            fun okGrid(list: List<MediaItem>) =
+                Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(list), gridParams()))
             return when {
-                parentId == ROOT -> ok(
-                    listOf(
-                        // Présélection en tête au démarrage : meilleurs titres FR/US.
-                        browsable(NODE_TREND_FR, "Populaire · France"),
-                        browsable(NODE_TREND_US, "Populaire · US"),
-                        browsable(NODE_RADIOS, ctx.getString(R.string.music_radios)),
-                        browsable(NODE_RECENT, ctx.getString(R.string.home_resume)),
-                        browsable(NODE_DOWNLOADS, ctx.getString(R.string.tab_library)),
-                        browsable(NODE_PLAYLISTS, ctx.getString(R.string.my_playlists)),
-                        browsable(NODE_FAVORITES, ctx.getString(R.string.fav_videos)),
-                    )
-                )
-                parentId == NODE_RADIOS -> ok(cacheAndBuild(parentId, Radio.stations()))
-                parentId == NODE_RECENT -> ok(cacheAndBuild(parentId, Recents.list(ctx)))
-                parentId == NODE_DOWNLOADS -> ok(cacheAndBuild(parentId, OfflineLibrary.audioTracks(ctx)))
+                parentId == ROOT -> { ensureCuratedLoaded(); okGrid(rootCards(ctx)) }
+                parentId == CarMusic.MIX -> okItems(cacheAndBuild(parentId, mixTracks()))
+                CarMusic.catById(parentId) != null -> curatedChildren(CarMusic.catById(parentId)!!)
+                parentId == NODE_RADIOS -> okItems(cacheAndBuild(parentId, Radio.stations()))
+                parentId == NODE_RECENT -> okItems(cacheAndBuild(parentId, Recents.list(ctx)))
+                parentId == NODE_DOWNLOADS -> okItems(cacheAndBuild(parentId, OfflineLibrary.audioTracks(ctx)))
                 parentId == NODE_PLAYLISTS ->
-                    ok(Favorites.playlistNames(ctx).map { browsable(PL_PREFIX + it, it) })
-                parentId == NODE_FAVORITES -> ok(cacheAndBuild(parentId, Favorites.videos(ctx)))
+                    okGrid(Favorites.playlistNames(ctx).map { name ->
+                        browsableCard(PL_PREFIX + name, name, randomArt(Favorites.tracksOf(ctx, name)))
+                    })
+                parentId == NODE_FAVORITES -> okItems(cacheAndBuild(parentId, Favorites.videos(ctx)))
                 parentId.startsWith(PL_PREFIX) ->
-                    ok(cacheAndBuild(parentId, Favorites.tracksOf(ctx, parentId.removePrefix(PL_PREFIX))))
-                parentId == NODE_TREND_FR -> asyncChildren(parentId, Q_FR)
-                parentId == NODE_TREND_US -> asyncChildren(parentId, Q_US)
-                else -> ok(emptyList())
+                    okItems(cacheAndBuild(parentId, Favorites.tracksOf(ctx, parentId.removePrefix(PL_PREFIX))))
+                else -> okItems(emptyList())
             }
         }
 
@@ -357,34 +350,107 @@ class MusicService : MediaLibraryService() {
         return tracks.map { playable(it, parentId) }
     }
 
-    private fun asyncChildren(
-        parentId: String,
-        query: String,
-    ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
-        browseCache[parentId]?.let {
+    // ---------- Contenu curé Android Auto (cartes + hero aléatoire) ----------
+
+    private val loadingCats = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /** Pochette « hero » aléatoire pour une carte (change à chaque affichage). */
+    private fun randomArt(tracks: List<VideoItem>): String? =
+        tracks.mapNotNull { it.thumbnail?.takeIf { u -> u.isNotEmpty() } }.randomOrNull()
+
+    /** Le « Mix du moment » = tous les artistes curés, mélangés (jamais la même liste). */
+    private fun mixTracks(): List<VideoItem> =
+        CarMusic.ARTIST_CATS.flatMap { browseCache[it.id].orEmpty() }
+            .distinctBy { it.url }.shuffled()
+
+    /** Cartes de l'accueil voiture : catégories curées puis nœuds système. */
+    private fun rootCards(ctx: android.content.Context): List<MediaItem> {
+        val cards = CarMusic.CATS.map { cat ->
+            val pool = if (cat.id == CarMusic.MIX) mixTracks() else browseCache[cat.id].orEmpty()
+            browsableCard(cat.id, cat.label, randomArt(pool))
+        }.toMutableList()
+        cards += browsableCard(NODE_RADIOS, ctx.getString(R.string.music_radios), null)
+        cards += browsableCard(NODE_RECENT, ctx.getString(R.string.home_resume), randomArt(Recents.list(ctx)))
+        cards += browsableCard(NODE_DOWNLOADS, ctx.getString(R.string.tab_library), null)
+        cards += browsableCard(NODE_PLAYLISTS, ctx.getString(R.string.my_playlists), null)
+        cards += browsableCard(NODE_FAVORITES, ctx.getString(R.string.fav_videos), randomArt(Favorites.videos(ctx)))
+        return cards
+    }
+
+    /** Précharge les catégories curées en arrière-plan puis rafraîchit les cartes. */
+    private fun ensureCuratedLoaded() {
+        CarMusic.ARTIST_CATS.forEach { cat ->
+            if (browseCache[cat.id] == null && loadingCats.add(cat.id)) {
+                scope.launch {
+                    val tracks = runCatching {
+                        if (cat.isPlaylist) Engine.importPlaylist(this@MusicService, cat.query, 100).second
+                        else Engine.searchMusic(this@MusicService, cat.query, 30)
+                    }.getOrDefault(emptyList())
+                    if (tracks.isNotEmpty()) browseCache[cat.id] = tracks
+                    loadingCats.remove(cat.id)
+                    // Les opérations de session doivent tourner sur le thread principal.
+                    watchdog.post {
+                        session?.notifyChildrenChanged(ROOT, CarMusic.CATS.size + 5, null)
+                        session?.notifyChildrenChanged(cat.id, tracks.size, null)
+                        session?.notifyChildrenChanged(CarMusic.MIX, mixTracks().size, null)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Enfants d'une catégorie curée : cache ou chargement à la volée. */
+    private fun curatedChildren(cat: CarMusic.Cat): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+        browseCache[cat.id]?.let {
             return Futures.immediateFuture(
-                LibraryResult.ofItemList(ImmutableList.copyOf(it.map { t -> playable(t, parentId) }), listParams())
+                LibraryResult.ofItemList(ImmutableList.copyOf(it.map { t -> playable(t, cat.id) }), listParams())
             )
         }
         val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
         scope.launch {
             val tracks = runCatching {
-                Engine.search(this@MusicService, query, DateFilter.ANY, 30)
+                if (cat.isPlaylist) Engine.importPlaylist(this@MusicService, cat.query, 100).second
+                else Engine.searchMusic(this@MusicService, cat.query, 30)
             }.getOrDefault(emptyList())
-            browseCache[parentId] = tracks
+            browseCache[cat.id] = tracks
             future.set(
-                LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { playable(t = it, parent = parentId) }), listParams())
+                LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { playable(it, cat.id) }), listParams())
             )
         }
         return future
     }
 
-    /** Force un affichage en LISTE compacte (épuré, sans « gros pavés »). */
+    /** Carte (dossier) avec pochette → grille premium au lieu d'une ligne de texte. */
+    private fun browsableCard(id: String, title: String, art: String?): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(id)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+                    .apply { if (!art.isNullOrEmpty()) setArtworkUri(art.toUri()) }
+                    .setExtras(contentStyleExtras())
+                    .build()
+            )
+            .build()
+
+    /** Listes de titres : affichage LISTE compacte avec pochette. */
     private fun listParams(): LibraryParams =
         LibraryParams.Builder().setExtras(contentStyleExtras()).build()
 
+    /** Accueil : GRILLE de cartes (pochettes) au lieu d'un menu texte. */
+    private fun gridParams(): LibraryParams =
+        LibraryParams.Builder().setExtras(Bundle().apply {
+            putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true)
+            putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 2) // GRILLE (cartes)
+            putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)  // liste
+        }).build()
+
     private fun contentStyleExtras() = Bundle().apply {
-        putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 1) // liste
+        putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true)
+        putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 2) // GRILLE
         putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)  // liste
     }
 
@@ -451,8 +517,6 @@ class MusicService : MediaLibraryService() {
 
     companion object {
         private const val ROOT = "root"
-        private const val NODE_TREND_FR = "trend_fr"
-        private const val NODE_TREND_US = "trend_us"
         private const val NODE_PLAYLISTS = "playlists"
         private const val NODE_FAVORITES = "favorites"
         private const val NODE_RADIOS = "radios"
@@ -466,7 +530,5 @@ class MusicService : MediaLibraryService() {
         const val CMD_EQ_SET = "com.mkmemories.mkdownloader.EQ_SET"
         private const val SEP = "::mk::"
         private const val SCHEME = "ytdlp"
-        private const val Q_FR = "top chansons françaises du moment 2026"
-        private const val Q_US = "top songs usa billboard hits 2026"
     }
 }
