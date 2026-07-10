@@ -823,7 +823,23 @@ class MainActivity : AppCompatActivity() {
     private fun downloadSelection() {
         val items = selectedItems()
         if (items.isEmpty()) { toast(getString(R.string.an_no_selection)); return }
-        askBatchQuality(items)
+        // Vidéo entière OU seulement le passage le plus revisionné (moment fort).
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.an_dl_choice_title)
+            .setItems(arrayOf(getString(R.string.an_dl_whole), getString(R.string.an_dl_highlight))) { _, which ->
+                if (which == 0) askBatchQuality(items)
+                else askHighlightBatchQuality(items)
+            }
+            .show()
+    }
+
+    private fun askHighlightBatchQuality(items: List<VideoItem>) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.dl_batch_count, items.size))
+            .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
+                downloadSelectionHighlights(items, QUALITIES[index])
+            }
+            .show()
     }
 
     /** Extraction en masse des transcriptions des vidéos sélectionnées → fichiers .txt. */
@@ -1008,6 +1024,7 @@ class MainActivity : AppCompatActivity() {
             menu.add(R.string.menu_listen).setOnMenuItemClickListener { openMusic(listOf(item), 0); true }
             menu.add(R.string.menu_artist_radio).setOnMenuItemClickListener { artistRadio(item); true }
             menu.add(R.string.menu_download_video).setOnMenuItemClickListener { askQualityAndDownload(item); true }
+            menu.add(R.string.menu_highlight).setOnMenuItemClickListener { downloadHighlight(item); true }
             menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
             menu.add(R.string.menu_download_channel).setOnMenuItemClickListener { downloadChannel(item); true }
             menu.add(R.string.menu_transcript).setOnMenuItemClickListener {
@@ -1356,6 +1373,46 @@ class MainActivity : AppCompatActivity() {
     private fun launchDownload(item: VideoItem, quality: Quality) {
         Downloads.start(this, item, quality)
         toast(getString(R.string.download_queued))
+    }
+
+    // ---------- Moment fort (passage le plus revisionné) ----------
+
+    private fun fmtClip(range: IntRange): String =
+        "${fmtHms(range.first * 1000L)} → ${fmtHms(range.last * 1000L)}"
+
+    /** Extrait uniquement le passage le plus revu d'une vidéo (sans tout télécharger). */
+    private fun downloadHighlight(item: VideoItem) {
+        setBusy(true, R.string.an_highlight_finding)
+        lifecycleScope.launch {
+            val range = runCatching { Engine.highlight(this@MainActivity, item.url) }.getOrNull()
+            setBusy(false)
+            if (range == null) { toast(getString(R.string.an_no_highlight)); return@launch }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(getString(R.string.an_highlight_range, fmtClip(range)))
+                .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
+                    Downloads.start(this@MainActivity, item, QUALITIES[index], range.first, range.last)
+                    toast(getString(R.string.an_highlight_queued, fmtClip(range)))
+                }
+                .show()
+        }
+    }
+
+    /** Extraction en masse des moments forts de la sélection, à une qualité donnée. */
+    private fun downloadSelectionHighlights(items: List<VideoItem>, quality: Quality) {
+        setBusy(true, R.string.an_highlight_finding)
+        lifecycleScope.launch {
+            var queued = 0
+            var missing = 0
+            for ((i, it) in items.withIndex()) {
+                ui.searchStatus.isVisible = true
+                ui.searchStatus.text = getString(R.string.an_highlights_finding, i + 1, items.size)
+                val range = runCatching { Engine.highlight(this@MainActivity, it.url) }.getOrNull()
+                if (range != null) { Downloads.start(this@MainActivity, it, quality, range.first, range.last); queued++ }
+                else missing++
+            }
+            setBusy(false)
+            toast(getString(R.string.an_highlights_queued, queued, missing))
+        }
     }
 
     /** Télécharge en lot les dernières vidéos de la chaîne d'une vidéo. */

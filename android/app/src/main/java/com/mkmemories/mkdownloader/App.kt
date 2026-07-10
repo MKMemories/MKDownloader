@@ -129,6 +129,51 @@ object Engine {
         )
     }
 
+    /**
+     * Passage le plus **revisionné** d'une vidéo (« moment fort »), calculé à
+     * partir des données *most replayed* de YouTube (champ `heatmap`). Renvoie
+     * l'intervalle (secondes) à extraire, ou null si la donnée n'existe pas
+     * (heatmap absente = vidéo trop récente/peu vue, ou plateforme sans heatmap).
+     *
+     * Autour du pic, on élargit à la région « chaude » contiguë, avec une durée
+     * minimale utilisable et un plafond, centrés sur le pic, plus un léger
+     * rembourrage pour ne pas couper au ras.
+     */
+    suspend fun highlight(context: Context, url: String): IntRange? = withContext(Dispatchers.IO) {
+        ensureReady(context)
+        val root = runCatching {
+            runJson(url) {
+                addOption("--no-playlist"); addOption("--no-warnings"); addOption("--dump-single-json")
+                applyCreds(context, url)
+            }
+        }.getOrNull() ?: return@withContext null
+        val heat = root.optJSONArray("heatmap") ?: return@withContext null
+        val segs = (0 until heat.length()).mapNotNull { i ->
+            heat.optJSONObject(i)?.let {
+                Triple(it.optDouble("start_time", -1.0), it.optDouble("end_time", -1.0), it.optDouble("value", 0.0))
+            }
+        }.filter { it.second > it.first && it.first >= 0.0 }
+        if (segs.isEmpty()) return@withContext null
+
+        val peakIdx = segs.indices.maxByOrNull { segs[it].third } ?: return@withContext null
+        val peak = segs[peakIdx].third
+        val threshold = peak * 0.80
+        var lo = peakIdx; while (lo - 1 >= 0 && segs[lo - 1].third >= threshold) lo--
+        var hi = peakIdx; while (hi + 1 < segs.size && segs[hi + 1].third >= threshold) hi++
+
+        var startS = segs[lo].first
+        var endS = segs[hi].second
+        val duration = root.optDouble("duration", 0.0).takeIf { it > 0 } ?: endS
+        val center = (segs[peakIdx].first + segs[peakIdx].second) / 2.0
+        val minLen = 45.0; val maxLen = 180.0; val pad = 3.0
+        if (endS - startS < minLen) { startS = center - minLen / 2; endS = center + minLen / 2 }
+        if (endS - startS > maxLen) { startS = center - maxLen / 2; endS = center + maxLen / 2 }
+        startS = (startS - pad).coerceAtLeast(0.0)
+        endS = (endS + pad).coerceAtMost(duration)
+        if (endS <= startS) return@withContext null
+        startS.toInt()..endS.toInt()
+    }
+
     // ---------- Recherche de vidéos ----------
 
     suspend fun search(

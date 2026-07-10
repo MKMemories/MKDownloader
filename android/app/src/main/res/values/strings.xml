@@ -97,6 +97,7 @@
     <string name="menu_play">▶ Lire la vidéo</string>
     <string name="menu_listen">♪ Écouter (audio)</string>
     <string name="menu_download_video">⬇ Télécharger la vidéo</string>
+    <string name="menu_highlight">✂ Moment fort (passage le plus revu)</string>
     <string name="menu_download_mp3">♪ Télécharger en MP3</string>
     <string name="no_channel">Chaîne introuvable pour cette vidéo.</string>
     <string name="channel_added">Chaîne ajoutée aux favoris ✔</string>
@@ -134,6 +135,15 @@
     <string name="an_no_selection">Sélectionne au moins une vidéo.</string>
     <string name="an_transcribing">Extraction des transcriptions…</string>
     <string name="an_transcribed">%1$d/%2$d transcriptions enregistrées dans Téléchargements/Analyste.</string>
+    <string name="an_highlight_finding">Recherche du moment fort…</string>
+    <string name="an_no_highlight">Pas de données « le plus revu » pour cette vidéo (trop récente ou peu vue).</string>
+    <string name="an_highlight_range">Moment fort : %1$s</string>
+    <string name="an_highlight_queued">Moment fort en file (%1$s).</string>
+    <string name="an_dl_choice_title">Que télécharger ?</string>
+    <string name="an_dl_whole">Vidéo entière</string>
+    <string name="an_dl_highlight">✂ Moment fort (le plus revu)</string>
+    <string name="an_highlights_finding">Repérage des moments forts… (%1$d/%2$d)</string>
+    <string name="an_highlights_queued">%1$d moment(s) fort(s) en file — %2$d sans donnée « le plus revu ».</string>
 
     <!-- Transcription / synthèse (Mistral) -->
     <string name="tr_loading">Récupération des sous-titres…</string>
