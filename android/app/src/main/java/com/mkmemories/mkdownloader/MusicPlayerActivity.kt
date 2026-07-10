@@ -21,10 +21,13 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.palette.graphics.Palette
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
+import androidx.recyclerview.widget.RecyclerView
 import coil.ImageLoader
 import coil.request.ImageRequest
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.common.util.concurrent.ListenableFuture
 import com.mkmemories.mkdownloader.databinding.ActivityMusicPlayerBinding
@@ -453,13 +456,47 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private fun showQueue() {
         if (queue.isEmpty()) return
-        val labels = queue.mapIndexed { i, t ->
-            (if (i == controller?.currentMediaItemIndex) "▶ " else "") + t.title
-        }.toTypedArray()
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.up_next)
-            .setItems(labels) { _, i -> controller?.seekTo(i, 0) }
-            .show()
+        val sheet = BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_queue, null)
+        val rv = view.findViewById<RecyclerView>(R.id.queueRecycler)
+        val adapter = QueueAdapter(
+            queue.toMutableList(),
+            currentUrl = { currentTrack()?.url },
+            onTap = { i -> controller?.seekTo(i, 0); sheet.dismiss() },
+        )
+        rv.layoutManager = LinearLayoutManager(this)
+        rv.adapter = adapter
+
+        val touch = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN,
+            ItemTouchHelper.START or ItemTouchHelper.END,
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder,
+            ): Boolean {
+                val from = viewHolder.bindingAdapterPosition
+                val to = target.bindingAdapterPosition
+                if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
+                adapter.move(from, to)
+                controller?.moveMediaItem(from, to)
+                queue = adapter.snapshot()
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val pos = viewHolder.bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return
+                adapter.removeAt(pos)
+                controller?.removeMediaItem(pos)
+                queue = adapter.snapshot()
+            }
+        })
+        touch.attachToRecyclerView(rv)
+
+        sheet.setContentView(view)
+        sheet.show()
     }
 
     private fun requestNotificationsIfNeeded() {
