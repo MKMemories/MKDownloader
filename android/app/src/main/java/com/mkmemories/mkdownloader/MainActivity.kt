@@ -22,6 +22,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import com.google.android.material.chip.Chip
@@ -49,6 +50,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var history: HistoryAdapter
     private lateinit var tv: TvAdapter
     private var tvAll: List<TvChannel> = emptyList()
+
+    private lateinit var cinema: CinemaAdapter
+    private val cinemaLangs = linkedSetOf(Cinema.Lang.FR, Cinema.Lang.EN, Cinema.Lang.AR)
+    private var cinemaGenre = Cinema.Genre.ALL
+    private var cinemaDecade = Cinema.DECADES.first()
+    private var cinemaSort = Cinema.SortBy.POPULAR
+    private var cinemaLoaded = false
 
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
@@ -130,6 +138,7 @@ class MainActivity : AppCompatActivity() {
         wireMusic()
         wireFavorites()
         wireHistory()
+        wireCinema()
         wireMiniPlayer()
 
         ui.bottomNav.setOnItemSelectedListener { item ->
@@ -286,11 +295,13 @@ class MainActivity : AppCompatActivity() {
     private fun showPane(itemId: Int) {
         ui.searchPane.isVisible = itemId == R.id.nav_search
         ui.musicPane.isVisible = itemId == R.id.nav_music
+        ui.cinemaPane.isVisible = itemId == R.id.nav_cinema
         ui.tvPane.isVisible = itemId == R.id.nav_tv
         ui.favoritesPane.isVisible = itemId == R.id.nav_favorites
         ui.historyPane.isVisible = itemId == R.id.nav_history
         when (itemId) {
             R.id.nav_tv -> loadTv()
+            R.id.nav_cinema -> if (!cinemaLoaded) loadCinema()
             R.id.nav_music -> {
                 refreshPlaylists()
                 // Report de la recherche : bascule sans retaper la même requête.
@@ -358,6 +369,10 @@ class MainActivity : AppCompatActivity() {
         ui.tvList.layoutManager = LinearLayoutManager(this)
         ui.tvList.adapter = tv
         ui.tvFilter.addTextChangedListener { applyTvFilter() }
+
+        cinema = CinemaAdapter(onOpen = ::openFilm)
+        ui.cinemaList.layoutManager = GridLayoutManager(this, 3)
+        ui.cinemaList.adapter = cinema
         // Plus d'IPTV ni de comptes DRM : la liste est 100 % directs YouTube.
         ui.tvAccounts.isVisible = false
     }
@@ -410,6 +425,95 @@ class MainActivity : AppCompatActivity() {
             putExtra(PlayerActivity.EXTRA_DIRECT, !c.resolve)
             putExtra(PlayerActivity.EXTRA_LIVE, true)
         })
+    }
+
+    // ---------- CINÉMA ----------
+
+    private fun wireCinema() {
+        // Langues : multi-sélection, au moins une reste toujours active.
+        Cinema.Lang.values().forEach { lang ->
+            ui.cinemaLangChips.addView(Chip(this).apply {
+                text = lang.label
+                isCheckable = true
+                isChecked = lang in cinemaLangs
+                setOnClickListener {
+                    if (isChecked) {
+                        cinemaLangs.add(lang)
+                    } else if (cinemaLangs.size <= 1) {
+                        isChecked = true; return@setOnClickListener
+                    } else {
+                        cinemaLangs.remove(lang)
+                    }
+                    if (cinemaLoaded) loadCinema()
+                }
+            })
+        }
+        // Genre.
+        Cinema.Genre.values().forEach { g ->
+            ui.cinemaGenreChips.addView(Chip(this).apply {
+                text = g.label
+                isCheckable = true
+                isChecked = g == cinemaGenre
+                setOnClickListener { cinemaGenre = g; loadCinema() }
+            })
+        }
+        // Décennie.
+        Cinema.DECADES.forEach { d ->
+            ui.cinemaDecadeChips.addView(Chip(this).apply {
+                text = d.label
+                isCheckable = true
+                isChecked = d == cinemaDecade
+                setOnClickListener { cinemaDecade = d; loadCinema() }
+            })
+        }
+        // Tri.
+        Cinema.SortBy.values().forEach { s ->
+            ui.cinemaSortChips.addView(Chip(this).apply {
+                text = s.label
+                isCheckable = true
+                isChecked = s == cinemaSort
+                setOnClickListener { cinemaSort = s; loadCinema() }
+            })
+        }
+    }
+
+    private fun loadCinema() {
+        cinemaLoaded = true
+        cinema.submit(emptyList())
+        ui.cinemaStatus.isVisible = false
+        ui.cinemaProgress.isVisible = true
+        lifecycleScope.launch {
+            val films = runCatching {
+                Cinema.browse(cinemaLangs, cinemaGenre, cinemaDecade, cinemaSort)
+            }
+            ui.cinemaProgress.isVisible = false
+            films.onSuccess { list ->
+                cinema.submit(list)
+                ui.cinemaList.isVisible = list.isNotEmpty()
+                if (list.isEmpty()) showCinemaStatus(getString(R.string.cinema_empty))
+            }.onFailure {
+                showCinemaStatus(getString(R.string.cinema_error))
+            }
+        }
+    }
+
+    private fun showCinemaStatus(msg: String) {
+        ui.cinemaStatus.text = msg
+        ui.cinemaStatus.isVisible = true
+        ui.cinemaList.isVisible = false
+    }
+
+    /** Ouvre un film : lecture (plein écran + qualité) ou téléchargement. */
+    private fun openFilm(film: Film) {
+        val item = film.toVideoItem()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(film.title)
+            .setItems(
+                arrayOf(getString(R.string.cinema_watch), getString(R.string.cinema_download))
+            ) { _, which ->
+                if (which == 0) openPlayer(item) else askQualityAndDownload(item)
+            }
+            .show()
     }
 
     // ---------- RECHERCHE ----------

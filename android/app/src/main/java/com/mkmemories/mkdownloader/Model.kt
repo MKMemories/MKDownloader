@@ -30,6 +30,30 @@ data class VideoItem(
     }
 }
 
+/**
+ * Un film de la bibliothèque cinéma (source : Internet Archive, domaine public
+ * / Creative Commons). L'URL de lecture/téléchargement est la page « details »
+ * qu'yt-dlp sait résoudre, ce qui réutilise tout le pipeline existant.
+ */
+data class Film(
+    val identifier: String,
+    val title: String,
+    val year: Int?,
+    val genres: List<String>,
+    val language: String?,
+) {
+    val detailsUrl get() = "https://archive.org/details/$identifier"
+    val poster get() = "https://archive.org/services/img/$identifier"
+
+    fun toVideoItem(): VideoItem = VideoItem(
+        url = detailsUrl,
+        title = title,
+        uploader = listOfNotNull(year?.toString(), genres.firstOrNull()).joinToString(" · ").ifEmpty { null },
+        durationSec = 0,
+        thumbnail = poster,
+    )
+}
+
 data class ChannelItem(
     val url: String,
     val name: String,

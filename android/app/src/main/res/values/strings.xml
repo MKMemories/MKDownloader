@@ -8,6 +8,16 @@
     <string name="tab_favorites">Favoris</string>
     <string name="tab_history">Historique</string>
     <string name="tab_tv">Direct TV</string>
+    <string name="tab_cinema">Cinéma</string>
+
+    <!-- Cinéma -->
+    <string name="cinema">Film</string>
+    <string name="cinema_header">Cinéma — films libres de droits</string>
+    <string name="cinema_subtitle">Domaine public &amp; Creative Commons (Internet Archive). Sources testées, classées par langue, genre et année.</string>
+    <string name="cinema_empty">Aucun film pour ces filtres. Essayez une autre langue, un autre genre ou une autre décennie.</string>
+    <string name="cinema_error">Impossible de charger la bibliothèque. Vérifiez la connexion et réessayez.</string>
+    <string name="cinema_watch">Regarder le film</string>
+    <string name="cinema_download">Télécharger</string>
 
     <!-- Direct TV -->
     <string name="tv">Chaîne TV</string>
