@@ -37,7 +37,7 @@
     <string name="tmdb_release_fr">🗓 Sortie en France : %1$s</string>
     <string name="tmdb_rating">⭐ Note : %1$s / 10</string>
     <string name="tmdb_no_trailer">Bande-annonce indisponible pour ce film.</string>
-    <string name="cast">Acteur</string>
+    <string name="actor">Acteur</string>
     <string name="movie_where">Où regarder en France</string>
     <string name="movie_synopsis">Synopsis</string>
     <string name="movie_cast">Têtes d\'affiche</string>

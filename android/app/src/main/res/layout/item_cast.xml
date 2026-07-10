@@ -11,7 +11,7 @@
         android:layout_width="72dp"
         android:layout_height="72dp"
         android:background="@color/card_hi"
-        android:contentDescription="@string/cast"
+        android:contentDescription="@string/actor"
         android:scaleType="centerCrop" />
 
     <TextView
