@@ -976,12 +976,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun clipboardText(): String? {
-        val cm = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return null
-        return cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()
-            ?.takeIf { it.isNotBlank() }
-    }
-
     private fun wireSearch() {
         attachSuggestions(ui.searchInput) { submit() }
         ui.searchInput.setOnEditorActionListener { _, _, _ -> submit(); true }
