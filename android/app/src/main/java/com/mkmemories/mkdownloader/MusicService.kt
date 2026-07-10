@@ -229,12 +229,14 @@ class MusicService : MediaLibraryService() {
             return when {
                 parentId == ROOT -> ok(
                     listOf(
+                        browsable(NODE_RADIOS, ctx.getString(R.string.music_radios)),
                         browsable(NODE_TREND_FR, "Populaire · France"),
                         browsable(NODE_TREND_US, "Populaire · US"),
                         browsable(NODE_PLAYLISTS, ctx.getString(R.string.my_playlists)),
                         browsable(NODE_FAVORITES, ctx.getString(R.string.fav_videos)),
                     )
                 )
+                parentId == NODE_RADIOS -> ok(cacheAndBuild(parentId, Radio.stations()))
                 parentId == NODE_PLAYLISTS ->
                     ok(Favorites.playlistNames(ctx).map { browsable(PL_PREFIX + it, it) })
                 parentId == NODE_FAVORITES -> ok(cacheAndBuild(parentId, Favorites.videos(ctx)))
@@ -292,16 +294,16 @@ class MusicService : MediaLibraryService() {
             startPositionMs: Long,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val first = mediaItems.firstOrNull()
-            if (first?.localConfiguration?.uri?.scheme != SCHEME) {
+            // Items « voiture » : identifiés par leur mediaId de navigation → on
+            // reconstruit la liste sœur depuis le cache (radios incluses). Les items
+            // « téléphone » (déjà porteurs de l'URL réelle) passent tels quels.
+            val (parent, url) = parseId(first?.mediaId ?: "")
+            val list = if (parent.isNotEmpty()) browseCache[parent] else null
+            if (list == null) {
                 return Futures.immediateFuture(
                     MediaSession.MediaItemsWithStartPosition(mediaItems, startIndex, startPositionMs)
                 )
             }
-            val (parent, url) = parseId(first.mediaId)
-            val list = browseCache[parent]
-                ?: return Futures.immediateFuture(
-                    MediaSession.MediaItemsWithStartPosition(mediaItems, 0, startPositionMs)
-                )
             val items = list.map { playable(it, parent) }
             val start = list.indexOfFirst { it.url == url }.coerceAtLeast(0)
             return Futures.immediateFuture(
@@ -377,7 +379,8 @@ class MusicService : MediaLibraryService() {
     private fun playable(t: VideoItem, parent: String): MediaItem =
         MediaItem.Builder()
             .setMediaId(trackId(parent, t.url))
-            .setUri(SCHEME + ":" + t.url) // résolu paresseusement par le ResolvingDataSource
+            // Radio : flux direct joué tel quel. Sinon « ytdlp:… » résolu paresseusement.
+            .setUri(if (Radio.isRadio(t.url)) Radio.streamOf(t.url) else SCHEME + ":" + t.url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(t.title)
@@ -419,6 +422,7 @@ class MusicService : MediaLibraryService() {
         private const val NODE_TREND_US = "trend_us"
         private const val NODE_PLAYLISTS = "playlists"
         private const val NODE_FAVORITES = "favorites"
+        private const val NODE_RADIOS = "radios"
         private const val NODE_SEARCH = "search"
         private const val PL_PREFIX = "pl:"
         private const val CMD_FAV = "com.mkmemories.mkdownloader.FAV"

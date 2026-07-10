@@ -800,6 +800,24 @@ class MainActivity : AppCompatActivity() {
         ui.musicGo.setOnClickListener { musicSearch() }
         ui.newPlaylist.setOnClickListener { promptNewPlaylist() }
         ui.musicImport.setOnClickListener { showImportDialog() }
+        buildRadioChips()
+    }
+
+    /** Radios françaises en direct (Radio Nova en tête). Un appui lance l'écoute. */
+    private fun buildRadioChips() {
+        Radio.STATIONS.forEach { station ->
+            ui.radioChips.addView(Chip(this).apply {
+                text = station.name
+                isClickable = true
+                setChipIconResource(android.R.drawable.ic_media_play)
+                isChipIconVisible = true
+                setOnClickListener {
+                    hapticTick()
+                    with(Radio) { openMusic(listOf(station.toVideoItem()), 0) }
+                    toast(getString(R.string.radio_playing, station.name))
+                }
+            })
+        }
     }
 
     /** Import d'une playlist YouTube / YouTube Music à partir de son lien. */

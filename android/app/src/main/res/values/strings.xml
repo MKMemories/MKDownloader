@@ -119,6 +119,8 @@
     <!-- Musique -->
     <string name="music_hint">Rechercher un titre, un artiste…</string>
     <string name="music_search">Chercher un morceau</string>
+    <string name="music_radios">Radios en direct</string>
+    <string name="radio_playing">📻 %1$s en cours…</string>
     <string name="my_playlists">Mes playlists</string>
     <string name="new_playlist">+ Playlist</string>
     <string name="import_playlist">⬇ Importer</string>

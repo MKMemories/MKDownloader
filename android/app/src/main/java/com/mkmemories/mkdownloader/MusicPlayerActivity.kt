@@ -163,7 +163,11 @@ class MusicPlayerActivity : AppCompatActivity() {
             val resolved = try {
                 withContext(Dispatchers.IO) {
                     MusicQueue.tracks.map { t ->
-                        async { t to Engine.audioStreamUrl(this@MusicPlayerActivity, t.url) }
+                        async {
+                            // Les radios sont des flux directs : pas de résolution yt-dlp.
+                            if (Radio.isRadio(t.url)) t to Radio.streamOf(t.url)
+                            else t to Engine.audioStreamUrl(this@MusicPlayerActivity, t.url)
+                        }
                     }.awaitAll()
                 }
             } catch (e: Exception) {
