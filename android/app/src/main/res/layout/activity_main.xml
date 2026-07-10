@@ -436,6 +436,15 @@
                     app:singleLine="true" />
             </HorizontalScrollView>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/musicDownloads"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:icon="@android:drawable/stat_sys_download_done"
+                android:text="@string/music_play_downloads" />
+
             <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/musicProgress"
                 android:layout_width="match_parent"

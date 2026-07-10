@@ -159,47 +159,35 @@ class MusicPlayerActivity : AppCompatActivity() {
     }
 
     private fun loadQueue() {
-        lifecycleScope.launch {
-            val resolved = try {
-                withContext(Dispatchers.IO) {
-                    MusicQueue.tracks.map { t ->
-                        async {
-                            // Radios + fichiers hors-ligne : flux directs, pas de yt-dlp.
-                            if (Playback.isDirect(t.url)) t to Playback.directUri(t.url)
-                            else t to Engine.audioStreamUrl(this@MusicPlayerActivity, t.url)
-                        }
-                    }.awaitAll()
-                }
-            } catch (e: Exception) {
-                toast(cleanError(e)); ui.musicLoading.isVisible = false; return@launch
-            }
-            val playable = resolved.filter { it.second != null }
-            if (playable.isEmpty()) { toast(getString(R.string.no_audio)); ui.musicLoading.isVisible = false; return@launch }
-
-            queue = playable.map { it.first }
-            val items = playable.map { (t, streamUrl) ->
-                MediaItem.Builder()
-                    .setUri(streamUrl)
-                    .setMediaId(t.url)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(t.title)
-                            .setArtist(t.uploader ?: t.channelName)
-                            .apply { t.thumbnail?.let { setArtworkUri(it.toUri()) } }
-                            .build()
-                    )
-                    .build()
-            }
-            val start = MusicQueue.startIndex.coerceIn(playable.indices)
-            controller?.apply {
-                setMediaItems(items, start, 0)
-                prepare()
-                playWhenReady = true
-            }
-            ui.musicLoading.isVisible = false
-            handler.post(ticker)
-            renderCurrent()
+        val tracks = MusicQueue.tracks
+        if (tracks.isEmpty()) { finish(); return }
+        queue = tracks
+        // Résolution PARESSEUSE : on ne résout pas les pistes ici. Chaque MediaItem
+        // porte l'URI « ytdlp:… » (ou l'URI directe pour radio/hors-ligne) et n'est
+        // extrait qu'au moment où ExoPlayer en a besoin → démarrage instantané et
+        // préchargement automatique de la piste suivante par ExoPlayer.
+        val items = tracks.map { t ->
+            MediaItem.Builder()
+                .setUri(Playback.playbackUri(t.url))
+                .setMediaId(t.url)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(t.title)
+                        .setArtist(t.uploader ?: t.channelName)
+                        .apply { t.thumbnail?.let { setArtworkUri(it.toUri()) } }
+                        .build()
+                )
+                .build()
         }
+        val start = MusicQueue.startIndex.coerceIn(tracks.indices)
+        controller?.apply {
+            setMediaItems(items, start, 0)
+            prepare()
+            playWhenReady = true
+        }
+        ui.musicLoading.isVisible = false
+        handler.post(ticker)
+        renderCurrent()
     }
 
     private val playerListener = object : Player.Listener {

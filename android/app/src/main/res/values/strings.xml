@@ -152,6 +152,7 @@
     <string name="radio_playing">📻 %1$s en cours…</string>
     <string name="my_playlists">Mes playlists</string>
     <string name="menu_artist_radio">📻 Radio artiste</string>
+    <string name="music_play_downloads">📥 Écouter mes téléchargements</string>
     <string name="artist_radio_starting">Radio %1$s…</string>
     <string name="new_playlist">+ Playlist</string>
     <string name="import_playlist">⬇ Importer</string>

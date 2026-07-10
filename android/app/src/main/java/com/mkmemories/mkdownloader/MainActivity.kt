@@ -952,6 +952,7 @@ class MainActivity : AppCompatActivity() {
         ui.musicGo.setOnClickListener { musicSearch() }
         ui.newPlaylist.setOnClickListener { promptNewPlaylist() }
         ui.musicImport.setOnClickListener { showImportDialog() }
+        ui.musicDownloads.setOnClickListener { hapticTick(); playAllOffline() }
         buildRadioChips()
     }
 
