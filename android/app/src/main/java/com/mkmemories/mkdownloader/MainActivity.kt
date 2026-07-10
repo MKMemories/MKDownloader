@@ -407,7 +407,7 @@ class MainActivity : AppCompatActivity() {
         ui.playlists.layoutManager = LinearLayoutManager(this)
         ui.playlists.adapter = playlists
 
-        history = HistoryAdapter(onOpen = ::openFile, onDelete = ::confirmDeleteEntry)
+        history = HistoryAdapter(onOpen = ::openFile, onDelete = ::confirmDeleteEntry, onMore = ::showLibraryMenu)
         ui.historyList.layoutManager = LinearLayoutManager(this)
         ui.historyList.adapter = history
 
@@ -1170,36 +1170,103 @@ class MainActivity : AppCompatActivity() {
 
     private fun wireHistory() {
         ui.clearHistory.setOnClickListener { confirmClearHistory() }
+        ui.libraryPlayAll.setOnClickListener { hapticTick(); playAllOffline() }
+        ui.librarySearch.addTextChangedListener { if (ui.historyPane.isVisible) refreshHistory() }
     }
 
+    /** Bibliothèque hors-ligne : filtre par type (Tout / Musique / Vidéos) + recherche. */
     private fun refreshHistory() {
         val all = History.all(this)
-        val sources = listOf("Tout") + all.map { it.platform }.distinct()
-        if (sourceFilter !in sources) sourceFilter = "Tout"
-        ui.sourceChips.removeAllViews()
-        sources.forEach { src ->
-            val chip = Chip(this).apply {
-                text = src; isCheckable = true; isChecked = src == sourceFilter
-                setOnClickListener { sourceFilter = src; refreshHistory() }
+        val types = listOf("Tout", "Musique", "Vidéos")
+        if (sourceFilter !in types) sourceFilter = "Tout"
+        if (ui.sourceChips.childCount != types.size) {
+            ui.sourceChips.removeAllViews()
+            types.forEach { t ->
+                ui.sourceChips.addView(Chip(this).apply {
+                    text = t; isCheckable = true; isChecked = t == sourceFilter
+                    setOnClickListener { sourceFilter = t; refreshHistory() }
+                })
             }
-            ui.sourceChips.addView(chip)
         }
-        val filtered = if (sourceFilter == "Tout") all else all.filter { it.platform == sourceFilter }
+        val q = ui.librarySearch.text?.toString()?.trim()?.lowercase().orEmpty()
+        val filtered = all
+            .filter {
+                when (sourceFilter) {
+                    "Musique" -> it.audio
+                    "Vidéos" -> !it.audio
+                    else -> true
+                }
+            }
+            .filter { q.isEmpty() || it.title.lowercase().contains(q) }
         history.submit(filtered)
         ui.historyEmpty.isVisible = filtered.isEmpty()
         ui.historyList.isVisible = filtered.isNotEmpty()
         ui.clearHistory.isVisible = all.isNotEmpty()
+        ui.libraryPlayAll.isVisible = filtered.any { it.audio }
     }
 
+    /** Lecture **hors-ligne** dans nos lecteurs (audio → service musical, vidéo → lecteur direct). */
     private fun openFile(entry: HistoryEntry) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(Uri.parse(entry.uri), if (entry.audio) "audio/*" else "video/*")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (entry.audio) {
+            val audio = History.all(this).filter { it.audio }
+            val tracks = audio.map(OfflineLibrary::toVideoItem)
+            val index = audio.indexOfFirst { it.id == entry.id }.coerceAtLeast(0)
+            openMusic(tracks, index)
+        } else {
+            startActivity(Intent(this, PlayerActivity::class.java).apply {
+                putExtra(PlayerActivity.EXTRA_URL, entry.uri)
+                putExtra(PlayerActivity.EXTRA_TITLE, entry.title)
+                putExtra(PlayerActivity.EXTRA_DIRECT, true)
             })
-        } catch (e: Exception) {
-            toast(getString(R.string.cannot_open))
+            overridePendingTransition(R.anim.slide_in_up, R.anim.hold)
         }
+    }
+
+    /** Écoute tous les morceaux audio hors-ligne d'affilée. */
+    private fun playAllOffline() {
+        val tracks = OfflineLibrary.audioTracks(this)
+        if (tracks.isEmpty()) toast(getString(R.string.no_results)) else openMusic(tracks, 0)
+    }
+
+    /** Menu long-press d'un élément : renommer / partager. */
+    private fun showLibraryMenu(entry: HistoryEntry, anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menu.add(R.string.lib_rename).setOnMenuItemClickListener { promptRename(entry); true }
+            menu.add(R.string.lib_share).setOnMenuItemClickListener { shareEntry(entry); true }
+            menu.add(R.string.delete).setOnMenuItemClickListener { confirmDeleteEntry(entry); true }
+            show()
+        }
+    }
+
+    private fun promptRename(entry: HistoryEntry) {
+        val input = AppCompatEditText(this).apply {
+            setText(entry.title); setSingleLine(true)
+            setSelection(text?.length ?: 0)
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.lib_rename)
+            .setView(android.widget.FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) })
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                if (History.rename(this, entry.id, input.text?.toString().orEmpty())) refreshHistory()
+            }
+            .show()
+    }
+
+    private fun shareEntry(entry: HistoryEntry) {
+        runCatching {
+            startActivity(
+                Intent.createChooser(
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = if (entry.audio) "audio/*" else "video/*"
+                        putExtra(Intent.EXTRA_STREAM, Uri.parse(entry.uri))
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    },
+                    getString(R.string.lib_share),
+                )
+            )
+        }.onFailure { toast(getString(R.string.cannot_open)) }
     }
 
     private fun confirmDeleteEntry(entry: HistoryEntry) {

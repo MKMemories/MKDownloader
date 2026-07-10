@@ -9,6 +9,7 @@ import com.mkmemories.mkdownloader.databinding.ItemHistoryBinding
 class HistoryAdapter(
     private val onOpen: (HistoryEntry) -> Unit,
     private val onDelete: (HistoryEntry) -> Unit,
+    private val onMore: ((HistoryEntry, android.view.View) -> Unit)? = null,
 ) : RecyclerView.Adapter<HistoryAdapter.Holder>() {
 
     private val items = mutableListOf<HistoryEntry>()
@@ -38,6 +39,7 @@ class HistoryAdapter(
             openButton.setOnClickListener { onOpen(item) }
             deleteButton.setOnClickListener { onDelete(item) }
             root.setOnClickListener { onOpen(item) }
+            root.setOnLongClickListener { onMore?.invoke(item, it); onMore != null }
         }
     }
 }

@@ -7,7 +7,15 @@
     <string name="tab_music">Musique</string>
     <string name="tab_favorites">Favoris</string>
     <string name="tab_history">Historique</string>
+    <string name="tab_library">Biblio</string>
     <string name="tab_tv">Direct TV</string>
+
+    <!-- Bibliothèque hors-ligne -->
+    <string name="library_header">Bibliothèque hors-ligne</string>
+    <string name="library_search_hint">Rechercher dans mes téléchargements…</string>
+    <string name="library_play_all">▶ Tout écouter</string>
+    <string name="lib_rename">Renommer</string>
+    <string name="lib_share">Partager</string>
     <string name="tab_cinema">Cinéma</string>
 
     <!-- Cinéma -->

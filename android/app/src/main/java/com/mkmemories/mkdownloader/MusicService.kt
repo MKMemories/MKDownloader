@@ -98,7 +98,9 @@ class MusicService : MediaLibraryService() {
                 dataSpec
             }
         }
-        val dataSourceFactory = ResolvingDataSource.Factory(httpFactory, resolver)
+        // DefaultDataSource gère http(s) ET les fichiers locaux (content://) pour le hors-ligne.
+        val baseFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpFactory)
+        val dataSourceFactory = ResolvingDataSource.Factory(baseFactory, resolver)
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
@@ -229,6 +231,7 @@ class MusicService : MediaLibraryService() {
             return when {
                 parentId == ROOT -> ok(
                     listOf(
+                        browsable(NODE_DOWNLOADS, ctx.getString(R.string.tab_library)),
                         browsable(NODE_RADIOS, ctx.getString(R.string.music_radios)),
                         browsable(NODE_TREND_FR, "Populaire · France"),
                         browsable(NODE_TREND_US, "Populaire · US"),
@@ -237,6 +240,7 @@ class MusicService : MediaLibraryService() {
                     )
                 )
                 parentId == NODE_RADIOS -> ok(cacheAndBuild(parentId, Radio.stations()))
+                parentId == NODE_DOWNLOADS -> ok(cacheAndBuild(parentId, OfflineLibrary.audioTracks(ctx)))
                 parentId == NODE_PLAYLISTS ->
                     ok(Favorites.playlistNames(ctx).map { browsable(PL_PREFIX + it, it) })
                 parentId == NODE_FAVORITES -> ok(cacheAndBuild(parentId, Favorites.videos(ctx)))
@@ -379,8 +383,8 @@ class MusicService : MediaLibraryService() {
     private fun playable(t: VideoItem, parent: String): MediaItem =
         MediaItem.Builder()
             .setMediaId(trackId(parent, t.url))
-            // Radio : flux direct joué tel quel. Sinon « ytdlp:… » résolu paresseusement.
-            .setUri(if (Radio.isRadio(t.url)) Radio.streamOf(t.url) else SCHEME + ":" + t.url)
+            // Radio / hors-ligne : flux direct. Sinon « ytdlp:… » résolu paresseusement.
+            .setUri(if (Playback.isDirect(t.url)) Playback.directUri(t.url) else SCHEME + ":" + t.url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(t.title)
@@ -423,6 +427,7 @@ class MusicService : MediaLibraryService() {
         private const val NODE_PLAYLISTS = "playlists"
         private const val NODE_FAVORITES = "favorites"
         private const val NODE_RADIOS = "radios"
+        private const val NODE_DOWNLOADS = "downloads"
         private const val NODE_SEARCH = "search"
         private const val PL_PREFIX = "pl:"
         private const val CMD_FAV = "com.mkmemories.mkdownloader.FAV"

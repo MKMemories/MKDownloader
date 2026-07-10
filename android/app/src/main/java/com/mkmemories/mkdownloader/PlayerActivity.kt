@@ -227,7 +227,10 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         exo?.release()
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(20_000, 60_000, 1_500, 3_000).build()
-        val factory = DefaultMediaSourceFactory(httpFactory())
+        // DefaultDataSource : http(s) pour le streaming + content:// pour les fichiers hors-ligne.
+        val factory = DefaultMediaSourceFactory(
+            androidx.media3.datasource.DefaultDataSource.Factory(this, httpFactory())
+        )
         exo = ExoPlayer.Builder(this)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(factory)

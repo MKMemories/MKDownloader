@@ -164,8 +164,8 @@ class MusicPlayerActivity : AppCompatActivity() {
                 withContext(Dispatchers.IO) {
                     MusicQueue.tracks.map { t ->
                         async {
-                            // Les radios sont des flux directs : pas de résolution yt-dlp.
-                            if (Radio.isRadio(t.url)) t to Radio.streamOf(t.url)
+                            // Radios + fichiers hors-ligne : flux directs, pas de yt-dlp.
+                            if (Playback.isDirect(t.url)) t to Playback.directUri(t.url)
                             else t to Engine.audioStreamUrl(this@MusicPlayerActivity, t.url)
                         }
                     }.awaitAll()
