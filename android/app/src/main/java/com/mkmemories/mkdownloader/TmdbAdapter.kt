@@ -7,8 +7,12 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.mkmemories.mkdownloader.databinding.ItemFilmBinding
 
-/** Grille d'affiches des sorties TMDB (réutilise la carte film). */
+/**
+ * Affiches TMDB (réutilise la carte film). En grille : largeur match_parent.
+ * En rangée horizontale (similaires) : passer [fixedWidthDp] pour une largeur fixe.
+ */
 class TmdbAdapter(
+    private val fixedWidthDp: Int? = null,
     private val onOpen: (Tmdb.Movie) -> Unit,
 ) : RecyclerView.Adapter<TmdbAdapter.Holder>() {
 
@@ -27,6 +31,10 @@ class TmdbAdapter(
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val m = items[position]
+        fixedWidthDp?.let { w ->
+            val px = (w * holder.ui.root.resources.displayMetrics.density).toInt()
+            holder.ui.root.layoutParams = holder.ui.root.layoutParams.apply { width = px }
+        }
         with(holder.ui) {
             filmTitle.text = m.title
             val meta = listOfNotNull(

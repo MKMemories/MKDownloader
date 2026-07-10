@@ -644,45 +644,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Fiche film : date de sortie France, synopsis + note, bande-annonce et recherche. */
+    /** Ouvre la fiche film premium (backdrop, casting, où regarder, similaires). */
     private fun openMovie(m: Tmdb.Movie) {
-        lifecycleScope.launch {
-            // Date de sortie officielle en salle en France (précise via TMDB).
-            val frDate = runCatching { Tmdb.frenchTheatricalDate(this@MainActivity, m.id) }.getOrNull()
-                ?: Tmdb.frenchDate(m.releaseDate)
-            val lines = listOfNotNull(
-                frDate?.let { getString(R.string.tmdb_release_fr, it) },
-                if (m.rating > 0) getString(R.string.tmdb_rating, "%.1f".format(m.rating)) else null,
-            ).joinToString("\n")
-            val msg = (if (lines.isNotEmpty()) "$lines\n\n" else "") +
-                m.overview.ifBlank { getString(R.string.tmdb_no_synopsis) }
-            MaterialAlertDialogBuilder(this@MainActivity)
-                .setTitle(m.title)
-                .setMessage(msg)
-                .setPositiveButton(R.string.tmdb_trailer) { _, _ -> playTrailer(m) }
-                .setNeutralButton(R.string.tmdb_search) { _, _ -> searchFilm(m.title) }
-                .setNegativeButton(R.string.close, null)
-                .show()
-        }
-    }
-
-    private fun playTrailer(m: Tmdb.Movie) {
-        toast(getString(R.string.tmdb_loading_trailer))
-        lifecycleScope.launch {
-            val key = runCatching { Tmdb.trailerYoutubeKey(this@MainActivity, m.id) }.getOrNull()
-            if (key != null) {
-                openPlayer(VideoItem("https://www.youtube.com/watch?v=$key", "${m.title} — bande-annonce", null, 0, null))
-            } else {
-                searchFilm("${m.title} bande annonce VF")
-            }
-        }
-    }
-
-    /** Bascule vers la recherche vidéo et lance une requête. */
-    private fun searchFilm(query: String) {
-        ui.bottomNav.selectedItemId = R.id.nav_search
-        ui.searchInput.setText(query)
-        searchVideos(query)
+        MovieDetailActivity.start(this, m.id, m.title, m.poster)
+        overridePendingTransition(R.anim.slide_in_up, R.anim.hold)
     }
 
     private fun promptTmdbKey() {

@@ -36,6 +36,13 @@
     <string name="tmdb_no_synopsis">Synopsis indisponible.</string>
     <string name="tmdb_release_fr">🗓 Sortie en France : %1$s</string>
     <string name="tmdb_rating">⭐ Note : %1$s / 10</string>
+    <string name="tmdb_no_trailer">Bande-annonce indisponible pour ce film.</string>
+    <string name="cast">Acteur</string>
+    <string name="movie_where">Où regarder en France</string>
+    <string name="movie_synopsis">Synopsis</string>
+    <string name="movie_cast">Têtes d\'affiche</string>
+    <string name="movie_similar">Films similaires</string>
+    <string name="movie_director">Réalisé par %1$s</string>
     <string name="tmdb_trailer">▶ Bande-annonce</string>
     <string name="tmdb_search">🔎 Chercher</string>
     <string name="tmdb_loading_trailer">Chargement de la bande-annonce…</string>
