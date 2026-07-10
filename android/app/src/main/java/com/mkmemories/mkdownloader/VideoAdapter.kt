@@ -14,9 +14,17 @@ class VideoAdapter(
     private val onPlay: (VideoItem) -> Unit,
     private val onToggleFav: (VideoItem) -> Unit,
     private val onMore: (VideoItem, View) -> Unit,
+    private val isSelected: ((VideoItem) -> Boolean)? = null,
+    private val onToggleSelect: ((VideoItem) -> Unit)? = null,
 ) : RecyclerView.Adapter<VideoAdapter.Holder>() {
 
     private val items = mutableListOf<VideoItem>()
+
+    /** Mode sélection multiple (outil d'analyse : choisir des vidéos en lot). */
+    var selectionMode: Boolean = false
+        set(value) { field = value; notifyDataSetChanged() }
+
+    fun items(): List<VideoItem> = items.toList()
 
     fun submit(list: List<VideoItem>) {
         items.clear(); items.addAll(list); notifyDataSetChanged()
@@ -58,7 +66,19 @@ class VideoAdapter(
                     }.start()
             }
             moreButton.setOnClickListener { onMore(item, it) }
-            root.setOnClickListener { onPlay(item) }
+
+            val selecting = selectionMode && onToggleSelect != null
+            if (selecting) {
+                val sel = isSelected?.invoke(item) == true
+                root.strokeWidth = if (sel) (2 * root.resources.displayMetrics.density).toInt() else 0
+                root.strokeColor = androidx.core.content.ContextCompat.getColor(root.context, R.color.accent2)
+                root.alpha = if (sel) 1f else 0.7f
+                root.setOnClickListener { onToggleSelect?.invoke(item); notifyItemChanged(position) }
+            } else {
+                root.strokeWidth = 0
+                root.alpha = 1f
+                root.setOnClickListener { onPlay(item) }
+            }
         }
     }
 }

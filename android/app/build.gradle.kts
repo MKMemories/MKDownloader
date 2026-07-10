@@ -11,8 +11,8 @@ android {
         applicationId = "com.mkmemories.mkdownloader"
         minSdk = 29
         targetSdk = 35
-        versionCode = 55
-        versionName = "5.40"
+        versionCode = 56
+        versionName = "5.41"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -56,7 +56,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { viewBinding = true }
+    buildFeatures { viewBinding = true; buildConfig = true }
 
     packaging {
         // Requis par youtubedl-android : ses binaires natifs doivent être

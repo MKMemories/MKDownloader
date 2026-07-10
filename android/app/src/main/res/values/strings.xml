@@ -123,6 +123,18 @@
     <string name="menu_download_channel">⬇ Télécharger la chaîne</string>
     <string name="menu_transcript">📝 Transcription &amp; synthèse</string>
 
+    <!-- Édition « L'Analyste 2027 » -->
+    <string name="an_select">☑ Sélectionner</string>
+    <string name="an_select_done">Terminer</string>
+    <string name="an_selected">%1$d sélectionné(s)</string>
+    <string name="an_transcribe">📝 Transcrire</string>
+    <string name="an_download">⬇ Télécharger</string>
+    <string name="an_add_actor">Ajouter</string>
+    <string name="an_add_actor_hint">Nom d\'une personnalité</string>
+    <string name="an_no_selection">Sélectionne au moins une vidéo.</string>
+    <string name="an_transcribing">Extraction des transcriptions…</string>
+    <string name="an_transcribed">%1$d/%2$d transcriptions enregistrées dans Téléchargements/Analyste.</string>
+
     <!-- Transcription / synthèse (Mistral) -->
     <string name="tr_loading">Récupération des sous-titres…</string>
     <string name="tr_none">Aucun sous-titre disponible pour cette vidéo.</string>

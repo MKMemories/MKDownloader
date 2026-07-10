@@ -74,6 +74,11 @@ class MainActivity : AppCompatActivity() {
     private var lastQuery: String = ""
     private var busy = false
     private val suggestJobs = HashMap<Int, Job>()
+
+    // Édition « L'Analyste 2027 » : outil d'analyse focalisé.
+    private val isAnalyste get() = BuildConfig.FLAVOR == "analyste"
+    private val selectedUrls = LinkedHashSet<String>()
+    private var selectMode = false
     private var skeletonPulse: ObjectAnimator? = null
     private var wasDownloading = false
 
@@ -163,6 +168,8 @@ class MainActivity : AppCompatActivity() {
             showPane(item.itemId); true
         }
         ui.bottomNav.selectedItemId = R.id.nav_search
+
+        if (isAnalyste) setupAnalyse()
 
         Downloads.restore(this)          // recharge une file interrompue
         requestNotifPermission()
@@ -379,6 +386,8 @@ class MainActivity : AppCompatActivity() {
             onPlay = ::openPlayer,
             onToggleFav = { hapticTick(); Favorites.toggleVideo(this, it) },
             onMore = ::showVideoMenu,
+            isSelected = { it.url in selectedUrls },
+            onToggleSelect = { toggleSelect(it) },
         )
         ui.results.layoutManager = LinearLayoutManager(this)
         ui.results.adapter = results
@@ -735,6 +744,126 @@ class MainActivity : AppCompatActivity() {
             }
             ui.dateChips.addView(chip)
         }
+    }
+
+    // ---------- Édition « L'Analyste 2027 » : outil d'analyse ----------
+
+    private fun setupAnalyse() {
+        // Nav focalisée : masque musique & cinéma.
+        ui.bottomNav.menu.removeItem(R.id.nav_music)
+        ui.bottomNav.menu.removeItem(R.id.nav_cinema)
+        // Recherche thématique par personnalité + sélection multiple.
+        ui.actorScroll.isVisible = true
+        buildActorChips()
+        ui.analyseTools.isVisible = true
+        ui.selectToggle.setOnClickListener { toggleSelectionMode() }
+        ui.trSelection.setOnClickListener { transcribeSelection() }
+        ui.dlSelection.setOnClickListener { downloadSelection() }
+    }
+
+    private fun buildActorChips() {
+        ui.actorChips.removeAllViews()
+        ui.actorChips.addView(Chip(this).apply {
+            text = getString(R.string.an_add_actor)
+            setChipIconResource(android.R.drawable.ic_input_add)
+            isChipIconVisible = true
+            setOnClickListener { promptAddActor() }
+        })
+        Actors.all(this).forEach { name ->
+            ui.actorChips.addView(Chip(this).apply {
+                text = name
+                setOnClickListener { hapticTick(); searchActor(name) }
+            })
+        }
+    }
+
+    private fun searchActor(name: String) {
+        closeSuggest(ui.searchInput)
+        ui.searchInput.setText(name)
+        searchVideos(name)
+    }
+
+    private fun promptAddActor() {
+        val input = AppCompatEditText(this).apply {
+            hint = getString(R.string.an_add_actor_hint); setSingleLine(true)
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.an_add_actor)
+            .setView(android.widget.FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) })
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val n = input.text?.toString().orEmpty()
+                if (n.isNotBlank()) { Actors.add(this, n); buildActorChips(); searchActor(n) }
+            }
+            .show()
+    }
+
+    private fun toggleSelectionMode() {
+        selectMode = !selectMode
+        results.selectionMode = selectMode
+        if (!selectMode) selectedUrls.clear()
+        ui.trSelection.isVisible = selectMode
+        ui.dlSelection.isVisible = selectMode
+        ui.selectToggle.text = getString(if (selectMode) R.string.an_select_done else R.string.an_select)
+        updateSelectionCount()
+    }
+
+    private fun toggleSelect(item: VideoItem) {
+        if (!selectedUrls.add(item.url)) selectedUrls.remove(item.url)
+        updateSelectionCount()
+    }
+
+    private fun updateSelectionCount() {
+        ui.selectionCount.text = if (selectMode) getString(R.string.an_selected, selectedUrls.size) else ""
+    }
+
+    private fun selectedItems(): List<VideoItem> = results.items().filter { it.url in selectedUrls }
+
+    private fun downloadSelection() {
+        val items = selectedItems()
+        if (items.isEmpty()) { toast(getString(R.string.an_no_selection)); return }
+        askBatchQuality(items)
+    }
+
+    /** Extraction en masse des transcriptions des vidéos sélectionnées → fichiers .txt. */
+    private fun transcribeSelection() {
+        val items = selectedItems()
+        if (items.isEmpty()) { toast(getString(R.string.an_no_selection)); return }
+        setBusy(true, R.string.an_transcribing)
+        lifecycleScope.launch {
+            var ok = 0
+            for (it in items) {
+                val segs = runCatching { Engine.transcript(this@MainActivity, it.url) }.getOrDefault(emptyList())
+                if (segs.isNotEmpty()) {
+                    val text = segs.joinToString("\n") { (ms, t) -> "[${fmtHms(ms)}] $t" }
+                    runCatching { saveTranscriptFile(it.title, text) }.onSuccess { ok++ }
+                }
+            }
+            setBusy(false)
+            toast(getString(R.string.an_transcribed, ok, items.size))
+        }
+    }
+
+    private fun fmtHms(ms: Long): String {
+        val s = ms / 1000
+        return "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
+    }
+
+    /** Écrit une transcription dans Téléchargements/Analyste/<titre>.txt. */
+    private fun saveTranscriptFile(title: String, text: String) {
+        val safe = title.replace(Regex("[/\\\\:*?\"<>|]"), "_").take(120).ifBlank { "transcription" }
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "$safe.txt")
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            put(
+                android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_DOWNLOADS + "/Analyste",
+            )
+        }
+        val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("écriture impossible")
+        contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) }
     }
 
     private fun wireSearch() {
