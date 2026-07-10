@@ -11,8 +11,8 @@ android {
         applicationId = "com.mkmemories.mkdownloader"
         minSdk = 29
         targetSdk = 35
-        versionCode = 54
-        versionName = "5.39"
+        versionCode = 55
+        versionName = "5.40"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -33,6 +33,20 @@ android {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("personal")
+        }
+    }
+
+    // Deux éditions à partir du même moteur : l'app grand public (MKDownloader)
+    // et l'app séparée « L'Analyste 2027 » (outil d'analyse neutre).
+    flavorDimensions += "edition"
+    productFlavors {
+        create("mk") {
+            dimension = "edition"
+            // Conserve l'applicationId d'origine → mises à jour en place.
+        }
+        create("analyste") {
+            dimension = "edition"
+            applicationId = "com.mkmemories.analyste2027"
         }
     }
 

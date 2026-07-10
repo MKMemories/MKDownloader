@@ -143,8 +143,8 @@ class MainActivity : AppCompatActivity() {
         ui.hero.load(R.drawable.hero)
 
         ui.versionLabel.text = runCatching {
-            "MKDownloader v" + packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrDefault("MKDownloader")
+            getString(R.string.app_name) + " v" + packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrDefault(getString(R.string.app_name))
 
         setupAdapters()
         buildDateChips()

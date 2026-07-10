@@ -28,22 +28,28 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build release APK
+      - name: Build release APKs (les deux éditions)
         run: gradle -p android :app:assembleRelease
 
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk MKDownloader.apk
+      - name: Rename APKs
+        run: |
+          cp android/app/build/outputs/apk/mk/release/app-mk-release.apk MKDownloader.apk
+          cp android/app/build/outputs/apk/analyste/release/app-analyste-release.apk LAnalyste2027.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MKDownloader-apk
-          path: MKDownloader.apk
+          name: apks
+          path: |
+            MKDownloader.apk
+            LAnalyste2027.apk
 
-      # Publie (ou remplace) l'APK dans une release "latest" facile à
+      # Publie (ou remplace) les APK dans une release "latest" facile à
       # télécharger depuis un téléphone.
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: "MKDownloader — dernier APK"
-          body: "APK Android compilé automatiquement depuis la branche main. Téléchargez MKDownloader.apk ci-dessous et installez-le (autorisez les sources inconnues si demandé)."
-          files: MKDownloader.apk
+          body: "APK Android compilés automatiquement depuis la branche main. MKDownloader.apk = app grand public ; LAnalyste2027.apk = outil d'analyse neutre (app séparée). Installez celui voulu (autorisez les sources inconnues si demandé)."
+          files: |
+            MKDownloader.apk
+            LAnalyste2027.apk
