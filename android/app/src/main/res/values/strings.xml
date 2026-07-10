@@ -30,6 +30,15 @@
     <string name="watch_trailers">🎞️ Sorties</string>
     <string name="watch_tv">📺 Direct TV</string>
     <string name="trailers_subtitle">Dernières bandes-annonces &amp; sorties ciné (YouTube).</string>
+    <string name="tmdb_add_key">➕ Activer les fiches détaillées (TMDB)</string>
+    <string name="tmdb_error">Impossible de charger les sorties. Vérifiez la clé TMDB et la connexion.</string>
+    <string name="tmdb_no_synopsis">Synopsis indisponible.</string>
+    <string name="tmdb_trailer">▶ Bande-annonce</string>
+    <string name="tmdb_search">🔎 Chercher</string>
+    <string name="tmdb_loading_trailer">Chargement de la bande-annonce…</string>
+    <string name="tmdb_key_hint">Clé API TMDB (v3)</string>
+    <string name="tmdb_key_note">Gratuite : themoviedb.org → Paramètres → API. Collez la clé « API Key (v3 auth) ».</string>
+    <string name="tmdb_key_saved">Clé TMDB enregistrée ✔</string>
 
     <!-- Direct TV -->
     <string name="tv">Chaîne TV</string>

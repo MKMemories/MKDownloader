@@ -64,6 +64,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var trailers: VideoAdapter
     private var trailersLoaded = false
+    private lateinit var tmdb: TmdbAdapter
+    private var tmdbCategory = Tmdb.Category.NOW
+    private var tmdbChipsBuilt = false
 
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
@@ -431,6 +434,7 @@ class MainActivity : AppCompatActivity() {
         )
         ui.trailersList.layoutManager = LinearLayoutManager(this)
         ui.trailersList.adapter = trailers
+        tmdb = TmdbAdapter(onOpen = ::openMovie)
 
         resumeRow = CarouselAdapter(onPlay = ::openPlayer)
         ui.resumeRow.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
@@ -514,6 +518,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.watchTv -> loadTv()
             }
         }
+        ui.tmdbKeyBanner.setOnClickListener { promptTmdbKey() }
 
         // Langues : multi-sélection, au moins une reste toujours active.
         Cinema.Lang.values().forEach { lang ->
@@ -589,12 +594,117 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Sorties ciné & bandes-annonces : dernières bandes-annonces d'AlloCiné
-     * (agrégateur) + une recherche fraîche, jouables/téléchargeables comme
-     * n'importe quelle vidéo. Aucune clé d'API requise.
+     * Sorties ciné : mode enrichi TMDB (affiches + fiches + bande-annonce) si une
+     * clé est configurée, sinon repli sur les bandes-annonces AlloCiné.
      */
     private fun loadTrailers() {
         trailersLoaded = true
+        val hasKey = Tmdb.hasKey(this)
+        ui.tmdbKeyBanner.isVisible = !hasKey
+        ui.tmdbChips.isVisible = hasKey
+        if (hasKey) {
+            if (!tmdbChipsBuilt) buildTmdbChips()
+            loadTmdbMovies()
+        } else {
+            loadAllocineTrailers()
+        }
+    }
+
+    private fun buildTmdbChips() {
+        tmdbChipsBuilt = true
+        Tmdb.Category.values().forEach { cat ->
+            ui.tmdbChips.addView(Chip(this).apply {
+                text = cat.label; isCheckable = true; isChecked = cat == tmdbCategory
+                setOnClickListener { tmdbCategory = cat; loadTmdbMovies() }
+            })
+        }
+    }
+
+    private fun loadTmdbMovies() {
+        ui.trailersList.layoutManager = GridLayoutManager(this, 3)
+        ui.trailersList.adapter = tmdb
+        tmdb.submit(emptyList())
+        ui.trailersStatus.isVisible = false
+        ui.trailersProgress.isVisible = true
+        lifecycleScope.launch {
+            val movies = runCatching { Tmdb.movies(this@MainActivity, tmdbCategory) }.getOrDefault(emptyList())
+            ui.trailersProgress.isVisible = false
+            tmdb.submit(movies)
+            ui.trailersList.isVisible = movies.isNotEmpty()
+            if (movies.isEmpty()) {
+                ui.trailersStatus.text = getString(R.string.tmdb_error)
+                ui.trailersStatus.isVisible = true
+            }
+        }
+    }
+
+    /** Fiche film : synopsis + note, avec bande-annonce et recherche. */
+    private fun openMovie(m: Tmdb.Movie) {
+        val note = if (m.rating > 0) "★ %.1f".format(m.rating) else null
+        val header = listOfNotNull(m.year, note).joinToString(" · ")
+        val msg = (if (header.isNotEmpty()) "$header\n\n" else "") +
+            m.overview.ifBlank { getString(R.string.tmdb_no_synopsis) }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(m.title)
+            .setMessage(msg)
+            .setPositiveButton(R.string.tmdb_trailer) { _, _ -> playTrailer(m) }
+            .setNeutralButton(R.string.tmdb_search) { _, _ -> searchFilm(m.title) }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun playTrailer(m: Tmdb.Movie) {
+        toast(getString(R.string.tmdb_loading_trailer))
+        lifecycleScope.launch {
+            val key = runCatching { Tmdb.trailerYoutubeKey(this@MainActivity, m.id) }.getOrNull()
+            if (key != null) {
+                openPlayer(VideoItem("https://www.youtube.com/watch?v=$key", "${m.title} — bande-annonce", null, 0, null))
+            } else {
+                searchFilm("${m.title} bande annonce VF")
+            }
+        }
+    }
+
+    /** Bascule vers la recherche vidéo et lance une requête. */
+    private fun searchFilm(query: String) {
+        ui.bottomNav.selectedItemId = R.id.nav_search
+        ui.searchInput.setText(query)
+        searchVideos(query)
+    }
+
+    private fun promptTmdbKey() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val input = AppCompatEditText(this).apply {
+            hint = getString(R.string.tmdb_key_hint); setSingleLine(true)
+            setText(Tmdb.key(this@MainActivity))
+        }
+        val note = android.widget.TextView(this).apply {
+            text = getString(R.string.tmdb_key_note); textSize = 12f
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_dim))
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0); addView(input); addView(note)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.tmdb_add_key)
+            .setView(box)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val k = input.text?.toString().orEmpty()
+                if (k.isNotBlank()) {
+                    Tmdb.setKey(this, k)
+                    toast(getString(R.string.tmdb_key_saved))
+                    loadTrailers()
+                }
+            }
+            .show()
+    }
+
+    /** Bandes-annonces AlloCiné (repli sans clé TMDB). */
+    private fun loadAllocineTrailers() {
+        ui.trailersList.layoutManager = LinearLayoutManager(this)
+        ui.trailersList.adapter = trailers
         trailers.submit(emptyList())
         ui.trailersStatus.isVisible = false
         ui.trailersProgress.isVisible = true
