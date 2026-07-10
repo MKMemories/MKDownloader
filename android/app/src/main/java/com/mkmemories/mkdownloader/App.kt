@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.URLEncoder
 
 class App : Application() {
@@ -165,6 +166,65 @@ object Engine {
             else runCatching { search(context, "tendances du moment", DateFilter.WEEK, limit) }
                 .getOrDefault(emptyList())
         }
+
+    /**
+     * Récupère la transcription (sous-titres) d'une vidéo — manuels puis
+     * automatiques (fr, puis en) — via yt-dlp, sans télécharger la vidéo.
+     * Renvoie une liste (horodatage ms, texte). Vide si aucun sous-titre.
+     */
+    suspend fun transcript(context: Context, url: String): List<Pair<Long, String>> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val dir = File(context.cacheDir, "subs-${System.currentTimeMillis()}")
+            try {
+                dir.mkdirs()
+                val request = YoutubeDLRequest(url).apply {
+                    addOption("--skip-download")
+                    addOption("--write-subs")
+                    addOption("--write-auto-subs")
+                    addOption("--sub-langs", "fr.*,en.*")
+                    addOption("--sub-format", "vtt")
+                    addOption("--extractor-args", YT_ARGS)
+                    addOption("--no-warnings")
+                    addOption("-o", "${dir.absolutePath}/%(id)s.%(ext)s")
+                }
+                runCatching { YoutubeDL.getInstance().execute(request, null, null) }
+                val vtt = dir.listFiles()
+                    ?.filter { it.name.endsWith(".vtt") }
+                    ?.minByOrNull { if (it.name.contains(".fr")) 0 else 1 }
+                    ?: return@withContext emptyList()
+                parseVtt(vtt.readText())
+            } finally {
+                dir.deleteRecursively()
+            }
+        }
+
+    private fun parseVtt(vtt: String): List<Pair<Long, String>> {
+        val out = ArrayList<Pair<Long, String>>()
+        val ts = Regex("(\\d{2}):(\\d{2}):(\\d{2})[.,](\\d{3})\\s*-->")
+        var last = ""
+        vtt.replace("\r\n", "\n").split("\n\n").forEach { block ->
+            val lines = block.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            val tsLine = lines.firstOrNull { it.contains("-->") } ?: return@forEach
+            val m = ts.find(tsLine) ?: return@forEach
+            val (h, mi, s, ms) = m.destructured
+            val startMs = (h.toLong() * 3600 + mi.toLong() * 60 + s.toLong()) * 1000 + ms.toLong()
+            var text = lines.filter {
+                !it.contains("-->") && it != "WEBVTT" && !it.startsWith("Kind:") && !it.startsWith("Language:")
+            }.joinToString(" ")
+            text = text.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ")
+                .replace(Regex("\\s+"), " ").trim()
+            if (text.isEmpty() || text == last) return@forEach
+            // Sous-titres roulants (auto) : évite les répétitions par chevauchement.
+            if (last.isNotEmpty() && (text.startsWith(last) || last.endsWith(text))) {
+                if (text.length > last.length) { out[out.size - 1] = startMs to text; last = text }
+                return@forEach
+            }
+            out.add(startMs to text)
+            last = text
+        }
+        return out
+    }
 
     // ---------- Recherche de chaînes ----------
 

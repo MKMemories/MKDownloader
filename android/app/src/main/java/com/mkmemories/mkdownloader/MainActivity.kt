@@ -881,6 +881,9 @@ class MainActivity : AppCompatActivity() {
             menu.add(R.string.menu_download_video).setOnMenuItemClickListener { askQualityAndDownload(item); true }
             menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
             menu.add(R.string.menu_download_channel).setOnMenuItemClickListener { downloadChannel(item); true }
+            menu.add(R.string.menu_transcript).setOnMenuItemClickListener {
+                TranscriptActivity.start(this@MainActivity, item.url, item.title); true
+            }
             menu.add(R.string.add_to_playlist).setOnMenuItemClickListener { choosePlaylist(item); true }
             menu.add(R.string.view_channel).setOnMenuItemClickListener { openChannelFromVideo(item); true }
             menu.add(R.string.add_channel_fav).setOnMenuItemClickListener { addChannelFav(item); true }
