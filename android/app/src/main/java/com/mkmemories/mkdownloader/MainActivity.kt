@@ -101,6 +101,11 @@ class MainActivity : AppCompatActivity() {
         view.clearFocus()
     }
 
+    /** Léger retour haptique sur les actions clés (feel premium). */
+    private fun hapticTick() {
+        ui.root.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+    }
+
     /** Ferme l'autocomplétion + le clavier au lancement d'une recherche. */
     private fun closeSuggest(field: AutoCompleteTextView) {
         suggestJobs[field.id]?.cancel()
@@ -124,6 +129,7 @@ class MainActivity : AppCompatActivity() {
         wireMiniPlayer()
 
         ui.bottomNav.setOnItemSelectedListener { item ->
+            hapticTick()
             showPane(item.itemId); true
         }
         ui.bottomNav.selectedItemId = R.id.nav_search
@@ -197,6 +203,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, MusicPlayerActivity::class.java))
         }
         ui.miniPlayPause.setOnClickListener {
+            hapticTick()
             miniController?.let { if (it.isPlaying) it.pause() else it.play() }
         }
         ui.miniClose.setOnClickListener {
@@ -250,6 +257,16 @@ class MainActivity : AppCompatActivity() {
                     androidx.palette.graphics.Palette.from(bmp).generate { p ->
                         val col = p?.getVibrantColor(p.getDominantColor(fallback)) ?: fallback
                         ui.miniPlayer.strokeColor = col
+                        // Fond vivant : dégradé sombre teinté de la couleur du morceau.
+                        val dim = android.graphics.Color.rgb(
+                            android.graphics.Color.red(col) * 28 / 100,
+                            android.graphics.Color.green(col) * 28 / 100,
+                            android.graphics.Color.blue(col) * 28 / 100,
+                        )
+                        ui.livingBg.background = android.graphics.drawable.GradientDrawable(
+                            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                            intArrayOf(dim, android.graphics.Color.BLACK),
+                        )
                     }
                 }
             }
@@ -289,7 +306,7 @@ class MainActivity : AppCompatActivity() {
         results = VideoAdapter(
             isFav = { Favorites.isVideoFav(this, it.url) },
             onPlay = ::openPlayer,
-            onToggleFav = { Favorites.toggleVideo(this, it) },
+            onToggleFav = { hapticTick(); Favorites.toggleVideo(this, it) },
             onMore = ::showVideoMenu,
         )
         ui.results.layoutManager = LinearLayoutManager(this)
