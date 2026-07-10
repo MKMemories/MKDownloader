@@ -952,7 +952,7 @@ class MainActivity : AppCompatActivity() {
         ui.musicGo.setOnClickListener { musicSearch() }
         ui.newPlaylist.setOnClickListener { promptNewPlaylist() }
         ui.musicImport.setOnClickListener { showImportDialog() }
-        ui.musicDownloads.setOnClickListener { hapticTick(); playAllOffline() }
+        ui.musicDownloads.setOnClickListener { hapticTick(); playDownloads() }
         buildRadioChips()
     }
 
@@ -1328,6 +1328,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Bibliothèque hors-ligne : filtre par type (Tout / Musique / Vidéos) + recherche. */
+    /** Liste des téléchargements actuellement affichés (filtre + recherche). */
+    private var libraryShown: List<HistoryEntry> = emptyList()
+
     private fun refreshHistory() {
         val all = History.all(this)
         val types = listOf("Tout", "Musique", "Vidéos")
@@ -1351,6 +1354,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .filter { q.isEmpty() || it.title.lowercase().contains(q) }
+        libraryShown = filtered
         history.submit(filtered)
         ui.historyEmpty.isVisible = filtered.isEmpty()
         ui.historyList.isVisible = filtered.isNotEmpty()
@@ -1358,10 +1362,14 @@ class MainActivity : AppCompatActivity() {
         ui.libraryPlayAll.isVisible = filtered.any { it.audio }
     }
 
-    /** Lecture **hors-ligne** dans nos lecteurs (audio → service musical, vidéo → lecteur direct). */
+    /**
+     * Lecture **hors-ligne** dans nos lecteurs. Pour l'audio, la file = uniquement
+     * les morceaux **actuellement affichés** (filtre + recherche) → on ne mélange
+     * plus toute la bibliothèque.
+     */
     private fun openFile(entry: HistoryEntry) {
         if (entry.audio) {
-            val audio = History.all(this).filter { it.audio }
+            val audio = libraryShown.filter { it.audio }.ifEmpty { History.all(this).filter { it.audio } }
             val tracks = audio.map(OfflineLibrary::toVideoItem)
             val index = audio.indexOfFirst { it.id == entry.id }.coerceAtLeast(0)
             openMusic(tracks, index)
@@ -1381,9 +1389,28 @@ class MainActivity : AppCompatActivity() {
         if (tracks.isEmpty()) toast(getString(R.string.no_results)) else openMusic(tracks, 0)
     }
 
-    /** Menu long-press d'un élément : renommer / partager. */
+    /**
+     * Bouton « Écouter mes téléchargements » : propose de tout écouter OU de
+     * choisir une playlist précise (pour ne pas tout mélanger).
+     */
+    private fun playDownloads() {
+        val playlists = Favorites.playlistNames(this)
+        if (playlists.isEmpty()) { playAllOffline(); return }
+        val options = listOf(getString(R.string.play_all_downloads)) + playlists
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.music_play_downloads)
+            .setItems(options.toTypedArray()) { _, i ->
+                if (i == 0) playAllOffline() else playPlaylist(playlists[i - 1])
+            }
+            .show()
+    }
+
+    /** Menu long-press d'un téléchargement : playlist, renommer, partager, supprimer. */
     private fun showLibraryMenu(entry: HistoryEntry, anchor: View) {
         PopupMenu(this, anchor).apply {
+            menu.add(R.string.add_to_playlist).setOnMenuItemClickListener {
+                choosePlaylist(OfflineLibrary.toVideoItem(entry)); true
+            }
             menu.add(R.string.lib_rename).setOnMenuItemClickListener { promptRename(entry); true }
             menu.add(R.string.lib_share).setOnMenuItemClickListener { shareEntry(entry); true }
             menu.add(R.string.delete).setOnMenuItemClickListener { confirmDeleteEntry(entry); true }
