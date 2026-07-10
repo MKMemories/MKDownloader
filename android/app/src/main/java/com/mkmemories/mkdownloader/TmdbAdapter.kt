@@ -30,7 +30,7 @@ class TmdbAdapter(
         with(holder.ui) {
             filmTitle.text = m.title
             val meta = listOfNotNull(
-                m.year,
+                Tmdb.frenchDate(m.releaseDate, short = true) ?: m.year,
                 if (m.rating > 0) "★ %.1f".format(m.rating) else null,
             ).joinToString(" · ")
             filmMeta.text = meta

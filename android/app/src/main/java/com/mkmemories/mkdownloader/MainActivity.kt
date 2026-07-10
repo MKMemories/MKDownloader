@@ -644,19 +644,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Fiche film : synopsis + note, avec bande-annonce et recherche. */
+    /** Fiche film : date de sortie France, synopsis + note, bande-annonce et recherche. */
     private fun openMovie(m: Tmdb.Movie) {
-        val note = if (m.rating > 0) "★ %.1f".format(m.rating) else null
-        val header = listOfNotNull(m.year, note).joinToString(" · ")
-        val msg = (if (header.isNotEmpty()) "$header\n\n" else "") +
-            m.overview.ifBlank { getString(R.string.tmdb_no_synopsis) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(m.title)
-            .setMessage(msg)
-            .setPositiveButton(R.string.tmdb_trailer) { _, _ -> playTrailer(m) }
-            .setNeutralButton(R.string.tmdb_search) { _, _ -> searchFilm(m.title) }
-            .setNegativeButton(R.string.close, null)
-            .show()
+        lifecycleScope.launch {
+            // Date de sortie officielle en salle en France (précise via TMDB).
+            val frDate = runCatching { Tmdb.frenchTheatricalDate(this@MainActivity, m.id) }.getOrNull()
+                ?: Tmdb.frenchDate(m.releaseDate)
+            val lines = listOfNotNull(
+                frDate?.let { getString(R.string.tmdb_release_fr, it) },
+                if (m.rating > 0) getString(R.string.tmdb_rating, "%.1f".format(m.rating)) else null,
+            ).joinToString("\n")
+            val msg = (if (lines.isNotEmpty()) "$lines\n\n" else "") +
+                m.overview.ifBlank { getString(R.string.tmdb_no_synopsis) }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(m.title)
+                .setMessage(msg)
+                .setPositiveButton(R.string.tmdb_trailer) { _, _ -> playTrailer(m) }
+                .setNeutralButton(R.string.tmdb_search) { _, _ -> searchFilm(m.title) }
+                .setNegativeButton(R.string.close, null)
+                .show()
+        }
     }
 
     private fun playTrailer(m: Tmdb.Movie) {

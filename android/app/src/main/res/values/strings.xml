@@ -34,6 +34,8 @@
     <string name="tmdb_change_key">🔑 Modifier la clé TMDB</string>
     <string name="tmdb_error">Impossible de charger les sorties. Vérifiez la clé TMDB et la connexion.</string>
     <string name="tmdb_no_synopsis">Synopsis indisponible.</string>
+    <string name="tmdb_release_fr">🗓 Sortie en France : %1$s</string>
+    <string name="tmdb_rating">⭐ Note : %1$s / 10</string>
     <string name="tmdb_trailer">▶ Bande-annonce</string>
     <string name="tmdb_search">🔎 Chercher</string>
     <string name="tmdb_loading_trailer">Chargement de la bande-annonce…</string>

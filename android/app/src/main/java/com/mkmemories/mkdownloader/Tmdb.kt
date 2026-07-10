@@ -22,10 +22,21 @@ object Tmdb {
         val id: Int,
         val title: String,
         val year: String?,
+        val releaseDate: String?,
         val poster: String?,
         val overview: String,
         val rating: Double,
     )
+
+    /** Formate une date « yyyy-MM-dd » en français (ex. « 5 août 2026 »). */
+    fun frenchDate(raw: String?, short: Boolean = false): String? {
+        if (raw.isNullOrBlank()) return null
+        return runCatching {
+            val d = java.time.LocalDate.parse(raw.take(10))
+            val pattern = if (short) "d MMM yyyy" else "d MMMM yyyy"
+            d.format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.FRENCH))
+        }.getOrNull()
+    }
 
     enum class Category(val label: String, val path: String) {
         NOW("À l'affiche", "movie/now_playing"),
@@ -71,6 +82,36 @@ object Tmdb {
             pick("fr-FR") ?: pick("en-US")
         }
 
+    /**
+     * Date de sortie **officielle en salle en France** (type théâtral), formatée
+     * en français. Repli sur une sortie limitée puis toute date FR si besoin.
+     */
+    suspend fun frenchTheatricalDate(context: Context, movieId: Int): String? =
+        withContext(Dispatchers.IO) {
+            val k = key(context).ifBlank { return@withContext null }
+            val json = httpGet("https://api.themoviedb.org/3/movie/$movieId/release_dates?api_key=$k")
+                ?: return@withContext null
+            val results = JSONObject(json).optJSONArray("results") ?: return@withContext null
+            for (i in 0 until results.length()) {
+                val c = results.optJSONObject(i) ?: continue
+                if (c.optString("iso_3166_1") != "FR") continue
+                val dates = c.optJSONArray("release_dates") ?: continue
+                var limited: String? = null
+                var any: String? = null
+                for (j in 0 until dates.length()) {
+                    val rd = dates.optJSONObject(j) ?: continue
+                    val date = rd.optStringOrNull("release_date") ?: continue
+                    if (any == null) any = date
+                    when (rd.optInt("type")) {
+                        3 -> return@withContext frenchDate(date)   // sortie en salle
+                        2 -> if (limited == null) limited = date    // sortie limitée
+                    }
+                }
+                return@withContext frenchDate(limited ?: any)
+            }
+            null
+        }
+
     private fun httpGet(url: String): String? = try {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 12000
@@ -91,10 +132,12 @@ object Tmdb {
             val o = arr.optJSONObject(i) ?: continue
             val title = o.optStringOrNull("title") ?: o.optStringOrNull("original_title") ?: continue
             val poster = o.optStringOrNull("poster_path")?.let { IMG + it }
+            val release = o.optStringOrNull("release_date")
             out += Movie(
                 id = o.optInt("id"),
                 title = title,
-                year = o.optStringOrNull("release_date")?.take(4),
+                year = release?.take(4),
+                releaseDate = release,
                 poster = poster,
                 overview = o.optString("overview"),
                 rating = o.optDouble("vote_average", 0.0),
