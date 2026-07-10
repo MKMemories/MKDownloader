@@ -144,6 +144,15 @@
     <string name="an_dl_highlight">✂ Moment fort (le plus revu)</string>
     <string name="an_highlights_finding">Repérage des moments forts… (%1$d/%2$d)</string>
     <string name="an_highlights_queued">%1$d moment(s) fort(s) en file — %2$d sans donnée « le plus revu ».</string>
+    <string name="an_clips_button">📋 Télécharger des extraits (liste)</string>
+    <string name="an_clips_title">Extraits par liste</string>
+    <string name="an_clips_help">Colle une ligne par extrait : ID de la vidéo, puis la plage. Ex : dQw4w9WgXcQ 12:40-14:10 Retraites</string>
+    <string name="an_clips_hint">ID  début-fin  [libellé]\n(une ligne par extrait)</string>
+    <string name="an_clips_go">Analyser</string>
+    <string name="an_clips_none">Aucun extrait valide trouvé. Format attendu : ID début-fin.</string>
+    <string name="an_clips_found">%1$d extrait(s) — choisis la qualité</string>
+    <string name="an_clips_queued">%1$d extrait(s) en file — %2$d ligne(s) ignorée(s).</string>
+    <string name="an_clip_default">Extrait</string>
 
     <!-- Transcription / synthèse (Mistral) -->
     <string name="tr_loading">Récupération des sous-titres…</string>

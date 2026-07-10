@@ -245,9 +245,9 @@ object Engine {
         }
 
     private fun parseVtt(vtt: String): List<Pair<Long, String>> {
-        val out = ArrayList<Pair<Long, String>>()
+        // 1) Extraction brute des cues (horodatage, texte).
+        val raw = ArrayList<Pair<Long, String>>()
         val ts = Regex("(\\d{2}):(\\d{2}):(\\d{2})[.,](\\d{3})\\s*-->")
-        var last = ""
         vtt.replace("\r\n", "\n").split("\n\n").forEach { block ->
             val lines = block.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
             val tsLine = lines.firstOrNull { it.contains("-->") } ?: return@forEach
@@ -259,14 +259,34 @@ object Engine {
             }.joinToString(" ")
             text = text.replace(Regex("<[^>]*>"), "").replace("&nbsp;", " ")
                 .replace(Regex("\\s+"), " ").trim()
-            if (text.isEmpty() || text == last) return@forEach
-            // Sous-titres roulants (auto) : évite les répétitions par chevauchement.
-            if (last.isNotEmpty() && (text.startsWith(last) || last.endsWith(text))) {
-                if (text.length > last.length) { out[out.size - 1] = startMs to text; last = text }
-                return@forEach
+            if (text.isNotEmpty()) raw.add(startMs to text)
+        }
+        return dedupeRolling(raw)
+    }
+
+    /**
+     * Reconstruit un discours continu à partir des sous-titres **roulants**
+     * (auto-générés) : chaque cue reprend la fin de la précédente puis ajoute
+     * quelques mots. On ne garde que les mots réellement nouveaux (chevauchement
+     * calculé au niveau du mot, comparaison insensible à la casse/ponctuation).
+     */
+    private fun dedupeRolling(raw: List<Pair<Long, String>>): List<Pair<Long, String>> {
+        fun norm(w: String) = w.lowercase().trim('.', ',', '!', '?', ';', ':', '"', '\'', '»', '«', '…', '-', '(', ')', '[', ']')
+        val out = ArrayList<Pair<Long, String>>()
+        var prevN = emptyList<String>()          // mots normalisés du cue précédent
+        for ((ms, text) in raw) {
+            val words = text.split(' ').filter { it.isNotEmpty() }
+            if (words.isEmpty()) continue
+            val wordsN = words.map(::norm)
+            val maxK = minOf(prevN.size, wordsN.size)
+            var overlap = 0
+            for (k in maxK downTo 1) {
+                if (prevN.subList(prevN.size - k, prevN.size) == wordsN.subList(0, k)) { overlap = k; break }
             }
-            out.add(startMs to text)
-            last = text
+            val fresh = words.drop(overlap)
+            prevN = wordsN
+            if (fresh.isEmpty()) continue        // cue entièrement contenu dans le précédent
+            out.add(ms to fresh.joinToString(" "))
         }
         return out
     }

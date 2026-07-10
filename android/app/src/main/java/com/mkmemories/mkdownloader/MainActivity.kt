@@ -759,6 +759,9 @@ class MainActivity : AppCompatActivity() {
         ui.selectToggle.setOnClickListener { toggleSelectionMode() }
         ui.trSelection.setOnClickListener { transcribeSelection() }
         ui.dlSelection.setOnClickListener { downloadSelection() }
+        // Machine d'extraits : renvoyer une liste ID + plages → téléchargements.
+        ui.importClips.isVisible = true
+        ui.importClips.setOnClickListener { importClips() }
     }
 
     private fun buildActorChips() {
@@ -842,20 +845,34 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Extraction en masse des transcriptions des vidéos sélectionnées → fichiers .txt. */
+    /**
+     * Extraction en masse des transcriptions des vidéos sélectionnées → fichiers
+     * .txt, chacun estampillé d'un **identifiant unique** (aller-retour bijectif),
+     * plus un index récapitulatif du lot.
+     */
     private fun transcribeSelection() {
         val items = selectedItems()
         if (items.isEmpty()) { toast(getString(R.string.an_no_selection)); return }
         setBusy(true, R.string.an_transcribing)
         lifecycleScope.launch {
             var ok = 0
-            for (it in items) {
+            val index = StringBuilder()
+            index.append("L'ANALYSTE 2027 — INDEX DES TRANSCRIPTIONS\n")
+            index.append("Renvoie une ligne par extrait voulu :  ID  début-fin  [libellé]\n")
+            index.append("Exemple :  dQw4w9WgXcQ  12:40-14:10  Retraites\n")
+            index.append("──────────────────────────────────────────\n")
+            for ((i, it) in items.withIndex()) {
+                ui.searchStatus.isVisible = true
+                ui.searchStatus.text = getString(R.string.an_highlights_finding, i + 1, items.size)
+                val id = Clips.idFor(it.url)
+                index.append(id).append("  ").append(it.title).append("\n")
                 val segs = runCatching { Engine.transcript(this@MainActivity, it.url) }.getOrDefault(emptyList())
                 if (segs.isNotEmpty()) {
-                    val text = segs.joinToString("\n") { (ms, t) -> "[${fmtHms(ms)}] $t" }
-                    runCatching { saveTranscriptFile(it.title, text) }.onSuccess { ok++ }
+                    val body = segs.joinToString("\n") { (ms, t) -> "[${fmtHms(ms)}] $t" }
+                    runCatching { saveTranscriptFile(it, id, body) }.onSuccess { ok++ }
                 }
             }
+            runCatching { writeAnalysteFile("00_INDEX.txt", index.toString()) }
             setBusy(false)
             toast(getString(R.string.an_transcribed, ok, items.size))
         }
@@ -866,11 +883,31 @@ class MainActivity : AppCompatActivity() {
         return "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
     }
 
-    /** Écrit une transcription dans Téléchargements/Analyste/<titre>.txt. */
-    private fun saveTranscriptFile(title: String, text: String) {
-        val safe = title.replace(Regex("[/\\\\:*?\"<>|]"), "_").take(120).ifBlank { "transcription" }
+    /** En-tête estampillé (ID unique) + corps → Téléchargements/Analyste/<ID> · <titre>.txt */
+    private fun saveTranscriptFile(item: VideoItem, id: String, body: String) {
+        val header = buildString {
+            append("════════════════════════════════════════\n")
+            append("L'ANALYSTE 2027 · TRANSCRIPTION\n")
+            append("ID     : ").append(id).append("\n")
+            append("TITRE  : ").append(item.title).append("\n")
+            item.uploader?.let { append("CHAÎNE : ").append(it).append("\n") }
+            append("URL    : ").append(item.url).append("\n")
+            append("════════════════════════════════════════\n")
+            append("▸ Pour télécharger un extrait, renvoie une ligne :\n")
+            append("▸   ").append(id).append("  début-fin   [libellé]\n")
+            append("▸   ex : ").append(id).append("  12:40-14:10   Passage clé\n")
+            append("▸ Plusieurs extraits possibles pour la même vidéo.\n")
+            append("════════════════════════════════════════\n\n")
+        }
+        val safeTitle = item.title.replace(Regex("[/\\\\:*?\"<>|]"), "_").take(100)
+        writeAnalysteFile("$id · $safeTitle.txt", header + body)
+    }
+
+    /** Écrit un fichier texte dans Téléchargements/Analyste/. */
+    private fun writeAnalysteFile(name: String, content: String) {
+        val safe = name.replace(Regex("[/\\\\:*?\"<>|]"), "_").ifBlank { "analyste.txt" }
         val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "$safe.txt")
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safe)
             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
             put(
                 android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
@@ -879,7 +916,70 @@ class MainActivity : AppCompatActivity() {
         }
         val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             ?: error("écriture impossible")
-        contentResolver.openOutputStream(uri)!!.use { it.write(text.toByteArray()) }
+        contentResolver.openOutputStream(uri)!!.use { it.write(content.toByteArray()) }
+    }
+
+    // ---------- Machine d'extraits : import d'une liste → téléchargements ----------
+
+    /** Ouvre le compositeur d'extraits (coller/saisir la liste ID + plages). */
+    private fun importClips() {
+        val input = AppCompatEditText(this).apply {
+            hint = getString(R.string.an_clips_hint)
+            setHorizontallyScrolling(false)
+            maxLines = 12
+            minLines = 6
+            gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 13f
+            // Pré-remplissage si le presse-papiers ressemble déjà à une liste d'extraits.
+            clipboardText()?.let { if (Clips.parse(it).isNotEmpty()) setText(it) }
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.an_clips_title)
+            .setMessage(R.string.an_clips_help)
+            .setView(android.widget.FrameLayout(this).apply {
+                setPadding(pad, pad / 2, pad, 0); addView(input)
+            })
+            .setNeutralButton(R.string.paste) { _, _ ->
+                // Colle le presse-papiers puis analyse directement (raccourci une main).
+                val pasted = clipboardText().orEmpty()
+                importClipsFromText((input.text?.toString().orEmpty() + "\n" + pasted).trim())
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.an_clips_go) { _, _ ->
+                importClipsFromText(input.text?.toString().orEmpty())
+            }
+            .show()
+    }
+
+    private fun importClipsFromText(text: String) {
+        val clips = Clips.parse(text)
+        if (clips.isEmpty()) { toast(getString(R.string.an_clips_none)); return }
+        val lines = text.split("\n").count { it.isNotBlank() && !it.trimStart().startsWith("#") }
+        val ignored = (lines - clips.size).coerceAtLeast(0)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.an_clips_found, clips.size))
+            .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
+                enqueueClips(clips, QUALITIES[index])
+                toast(getString(R.string.an_clips_queued, clips.size, ignored))
+            }
+            .show()
+    }
+
+    private fun enqueueClips(clips: List<Clips.Clip>, quality: Quality) {
+        clips.forEach { c ->
+            val label = c.label?.takeIf { it.isNotBlank() }
+                ?: (getString(R.string.an_clip_default) + " " + Clips.idFor(c.url))
+            val item = VideoItem(url = c.url, title = label, uploader = null, durationSec = 0, thumbnail = null)
+            Downloads.start(this, item, quality, c.startSec, c.endSec)
+        }
+    }
+
+    private fun clipboardText(): String? {
+        val cm = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return null
+        return cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()
+            ?.takeIf { it.isNotBlank() }
     }
 
     private fun wireSearch() {
