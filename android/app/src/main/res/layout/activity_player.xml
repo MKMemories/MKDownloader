@@ -53,6 +53,26 @@
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/speedButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:paddingHorizontal="8dp"
+                android:text="1×"
+                android:textColor="#FFFFFF"
+                android:contentDescription="@string/speed" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/pipButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/pip"
+                app:icon="@android:drawable/ic_menu_crop"
+                app:iconTint="#FFFFFF" />
+
             <androidx.mediarouter.app.MediaRouteButton
                 android:id="@+id/castButton"
                 android:layout_width="wrap_content"
@@ -78,6 +98,20 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:indeterminateTint="#FFFFFF"
+            android:visibility="gone" />
+
+        <!-- Retour visuel des gestes (±10 s, luminosité, volume) -->
+        <TextView
+            android:id="@+id/gestureIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/dropdown_bg"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
             android:visibility="gone" />
     </FrameLayout>
 

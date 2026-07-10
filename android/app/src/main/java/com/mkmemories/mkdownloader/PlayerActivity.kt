@@ -1,7 +1,16 @@
 package com.mkmemories.mkdownloader
 
+import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.media.AudioManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Rational
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -13,6 +22,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import kotlin.math.roundToInt
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.MediaItem
@@ -53,10 +63,48 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     private var maxHeight = 1080
     private var durationSec = 0
     private var sources: List<String> = emptyList()
+    private var speed = 1f
 
     private val qualityOptions = listOf(
         2160 to "4K (max)", 1080 to "1080p", 720 to "720p", 480 to "480p", 360 to "360p"
     )
+    private val speedOptions = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+
+    private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private val hideGesture = Runnable { ui.gestureIndicator.isVisible = false }
+    private var scrollStartVol = -1
+    private var scrollStartBright = -1f
+
+    private val gestureDetector by lazy {
+        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean {
+                scrollStartVol = -1; scrollStartBright = -1f
+                return true
+            }
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (ui.playerView.isControllerFullyVisible) ui.playerView.hideController()
+                else ui.playerView.showController()
+                return true
+            }
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val p = exo ?: return true
+                val forward = e.x > ui.playerView.width / 2f
+                val target = if (forward) p.currentPosition + 10_000 else p.currentPosition - 10_000
+                val max = if (p.duration > 0) p.duration else Long.MAX_VALUE
+                p.seekTo(target.coerceIn(0, max))
+                showGesture(if (forward) "+10 s ⏩" else "⏪ −10 s")
+                return true
+            }
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
+                if (e1 == null || live) return false
+                val h = ui.videoContainer.height.takeIf { it > 0 } ?: return false
+                val frac = (e1.y - e2.y) / h // vers le haut = augmentation
+                if (e1.x > ui.playerView.width / 2f) adjustVolume(frac) else adjustBrightness(frac)
+                return true
+            }
+        })
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +126,11 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         ui.downloadButton.setOnClickListener { askQualityAndDownload(null, null) }
         ui.downloadClipButton.setOnClickListener { downloadClip() }
         ui.clipRange.addOnChangeListener { _, _, _ -> updateClipLabels() }
+        ui.speedButton.setOnClickListener { chooseSpeed() }
+        ui.pipButton.setOnClickListener { enterPip() }
+        ui.pipButton.isVisible = hasPip()
+        @Suppress("ClickableViewAccessibility")
+        ui.playerView.setOnTouchListener { _, ev -> gestureDetector.onTouchEvent(ev) }
         setupCastButton()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -148,7 +201,9 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
                 toast(cleanError(e)); finish(); return@launch
             }
             if (sources.isEmpty()) { toast(getString(R.string.no_results)); finish(); return@launch }
-            buildAndPlay(0)
+            val startAt = if (!live && !direct) Resume.get(this@PlayerActivity, videoUrl) else 0L
+            buildAndPlay(startAt)
+            if (startAt > 0) toast(getString(R.string.resume_at, fmt((startAt / 1000).toInt())))
             ui.playerLoading.isVisible = false
         }
     }
@@ -196,6 +251,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
                 player.setMediaSource(src)
                 player.prepare()
                 if (resumeMs > 0) player.seekTo(resumeMs)
+                player.setPlaybackSpeed(speed)
                 player.playWhenReady = true
                 player.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
@@ -222,6 +278,82 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
                 reloadKeepingPosition()
             }
             .show()
+    }
+
+    // ---------- Vitesse ----------
+
+    private fun chooseSpeed() {
+        val labels = speedOptions.map { "${it}×".replace(".0×", "×") }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.speed_dialog)
+            .setItems(labels) { _, i ->
+                speed = speedOptions[i]
+                exo?.setPlaybackSpeed(speed)
+                ui.speedButton.text = labels[i]
+            }
+            .show()
+    }
+
+    // ---------- Gestes (double-tap ±10 s, glisser luminosité/volume) ----------
+
+    private fun adjustVolume(frac: Float) {
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (scrollStartVol < 0) scrollStartVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val nv = (scrollStartVol + frac * max).roundToInt().coerceIn(0, max)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nv, 0)
+        showGesture("🔊 ${nv * 100 / max}%")
+    }
+
+    private fun adjustBrightness(frac: Float) {
+        if (scrollStartBright < 0) {
+            scrollStartBright = window.attributes.screenBrightness.takeIf { it >= 0f } ?: 0.5f
+        }
+        val nb = (scrollStartBright + frac).coerceIn(0.02f, 1f)
+        window.attributes = window.attributes.apply { screenBrightness = nb }
+        showGesture("🔆 ${(nb * 100).toInt()}%")
+    }
+
+    private fun showGesture(text: String) {
+        ui.gestureIndicator.text = text
+        ui.gestureIndicator.isVisible = true
+        uiHandler.removeCallbacks(hideGesture)
+        uiHandler.postDelayed(hideGesture, 700)
+    }
+
+    // ---------- Picture-in-Picture ----------
+
+    private fun hasPip() =
+        packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    private fun enterPip() {
+        if (!hasPip()) return
+        runCatching {
+            enterPictureInPictureMode(
+                PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+            )
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Passe en fenêtre flottante quand on quitte l'app pendant la lecture.
+        if (hasPip() && exo?.isPlaying == true && !isChangingConfigurations) enterPip()
+    }
+
+    override fun onPictureInPictureModeChanged(inPip: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, newConfig)
+        // En PiP : plus que la vidéo, on masque tout le reste.
+        ui.playerView.useController = !inPip
+        ui.topBar.isVisible = !inPip
+        ui.fullscreenButton.isVisible = !inPip
+        if (!live) ui.panel.isVisible = !inPip && !fullscreen
+        if (inPip) {
+            ui.videoContainer.layoutParams = ui.videoContainer.layoutParams.apply {
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+            }
+        } else if (!fullscreen && !live) {
+            setPortraitVideoSize()
+        }
     }
 
     private fun reloadKeepingPosition() {
@@ -306,6 +438,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
 
     override fun onStop() {
         super.onStop()
+        uiHandler.removeCallbacks(hideGesture)
+        exo?.let { if (!live && !direct) Resume.save(this, videoUrl, it.currentPosition, it.duration) }
         exo?.release(); exo = null
         castPlayer?.setSessionAvailabilityListener(null)
         castPlayer?.release(); castPlayer = null

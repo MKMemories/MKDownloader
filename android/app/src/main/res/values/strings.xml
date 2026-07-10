@@ -127,6 +127,10 @@
     <string name="cast">Diffuser</string>
     <string name="quality">Qualité</string>
     <string name="fullscreen">Plein écran</string>
+    <string name="speed">Vitesse</string>
+    <string name="speed_dialog">Vitesse de lecture</string>
+    <string name="pip">Mode fenêtre</string>
+    <string name="resume_at">Reprise à %1$s</string>
     <string name="quality_max">Qualité (Max)</string>
     <string name="quality_label">Qualité (%1$s)</string>
     <string name="choose_stream_quality">Qualité de lecture</string>
