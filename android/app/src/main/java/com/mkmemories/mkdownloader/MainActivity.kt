@@ -142,6 +142,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(ui.root)
         ui.hero.load(R.drawable.hero)
 
+        ui.versionLabel.text = runCatching {
+            "MKDownloader v" + packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrDefault("MKDownloader")
+
         setupAdapters()
         buildDateChips()
         wireSearch()
@@ -600,7 +604,9 @@ class MainActivity : AppCompatActivity() {
     private fun loadTrailers() {
         trailersLoaded = true
         val hasKey = Tmdb.hasKey(this)
-        ui.tmdbKeyBanner.isVisible = !hasKey
+        // Toujours visible : activer (sans clé) ou modifier (avec clé) la clé TMDB.
+        ui.tmdbKeyBanner.isVisible = true
+        ui.tmdbKeyBanner.text = getString(if (hasKey) R.string.tmdb_change_key else R.string.tmdb_add_key)
         ui.tmdbChips.isVisible = hasKey
         if (hasKey) {
             if (!tmdbChipsBuilt) buildTmdbChips()

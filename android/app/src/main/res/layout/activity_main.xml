@@ -369,6 +369,16 @@
                 android:layout_gravity="center_horizontal"
                 android:text="@string/update_engine"
                 android:textColor="@color/text_dim" />
+
+            <TextView
+                android:id="@+id/versionLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:gravity="center"
+                android:paddingBottom="4dp"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp" />
         </LinearLayout>
 
         <!-- ============ MUSIQUE ============ -->
@@ -648,8 +658,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="@string/tmdb_add_key"
-                    android:visibility="gone" />
+                    android:text="@string/tmdb_add_key" />
 
                 <HorizontalScrollView
                     android:layout_width="match_parent"
