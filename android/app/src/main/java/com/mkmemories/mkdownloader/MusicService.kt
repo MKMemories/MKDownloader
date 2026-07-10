@@ -237,11 +237,12 @@ class MusicService : MediaLibraryService() {
             return when {
                 parentId == ROOT -> ok(
                     listOf(
-                        browsable(NODE_RECENT, ctx.getString(R.string.home_resume)),
-                        browsable(NODE_DOWNLOADS, ctx.getString(R.string.tab_library)),
-                        browsable(NODE_RADIOS, ctx.getString(R.string.music_radios)),
+                        // Présélection en tête au démarrage : meilleurs titres FR/US.
                         browsable(NODE_TREND_FR, "Populaire · France"),
                         browsable(NODE_TREND_US, "Populaire · US"),
+                        browsable(NODE_RADIOS, ctx.getString(R.string.music_radios)),
+                        browsable(NODE_RECENT, ctx.getString(R.string.home_resume)),
+                        browsable(NODE_DOWNLOADS, ctx.getString(R.string.tab_library)),
                         browsable(NODE_PLAYLISTS, ctx.getString(R.string.my_playlists)),
                         browsable(NODE_FAVORITES, ctx.getString(R.string.fav_videos)),
                     )
