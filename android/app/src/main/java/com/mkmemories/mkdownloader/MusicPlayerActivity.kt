@@ -512,8 +512,8 @@ class MusicPlayerActivity : AppCompatActivity() {
     }
 
     private fun downloadMp3(t: VideoItem) {
-        if (!Downloads.start(this, t, AUDIO_QUALITY)) toast(getString(R.string.one_at_a_time))
-        else toast(getString(R.string.download_started))
+        Downloads.start(this, t, AUDIO_QUALITY)
+        toast(getString(R.string.download_queued))
     }
 
     private fun choosePlaylist(t: VideoItem) {

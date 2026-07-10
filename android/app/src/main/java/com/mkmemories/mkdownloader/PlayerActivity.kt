@@ -401,11 +401,11 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_quality)
             .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
-                val started = Downloads.start(
+                Downloads.start(
                     this, VideoItem(videoUrl, videoTitle, null, 0, null),
                     QUALITIES[index], startSec, endSec,
                 )
-                toast(getString(if (started) R.string.download_started else R.string.one_at_a_time))
+                toast(getString(R.string.download_queued))
             }
             .show()
     }

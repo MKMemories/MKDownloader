@@ -145,14 +145,31 @@ class MainActivity : AppCompatActivity() {
         wireCinema()
         wireMiniPlayer()
 
+        // La carte de téléchargement ouvre la file détaillée.
+        ui.downloadCard.setOnClickListener { openDownloadQueue() }
+
         ui.bottomNav.setOnItemSelectedListener { item ->
             hapticTick()
             showPane(item.itemId); true
         }
         ui.bottomNav.selectedItemId = R.id.nav_search
 
+        Downloads.restore(this)          // recharge une file interrompue
+        requestNotifPermission()
         handleShareIntent(intent)
         if (intent?.action != Intent.ACTION_SEND) loadHomeFeed()
+    }
+
+    /** Demande la permission de notification (Android 13+) pour la progression en arrière-plan. */
+    private fun requestNotifPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 42)
+            }
+        }
     }
 
     /**
@@ -218,9 +235,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        Downloads.onChange = ::renderDownloadState
+        Downloads.onChange = { renderDownloads() }
         Downloads.onHistoryChanged = { if (ui.historyPane.isVisible) refreshHistory() }
-        renderDownloadState(Downloads.state)
+        renderDownloads()
+        Downloads.resumeIfNeeded(this)
         bindMiniController()
     }
 
@@ -711,6 +729,7 @@ class MainActivity : AppCompatActivity() {
             menu.add(R.string.menu_listen).setOnMenuItemClickListener { openMusic(listOf(item), 0); true }
             menu.add(R.string.menu_download_video).setOnMenuItemClickListener { askQualityAndDownload(item); true }
             menu.add(R.string.menu_download_mp3).setOnMenuItemClickListener { downloadMp3(item); true }
+            menu.add(R.string.menu_download_channel).setOnMenuItemClickListener { downloadChannel(item); true }
             menu.add(R.string.add_to_playlist).setOnMenuItemClickListener { choosePlaylist(item); true }
             menu.add(R.string.view_channel).setOnMenuItemClickListener { openChannelFromVideo(item); true }
             menu.add(R.string.add_channel_fav).setOnMenuItemClickListener { addChannelFav(item); true }
@@ -925,7 +944,7 @@ class MainActivity : AppCompatActivity() {
             .setItems(options) { _, i ->
                 when (i) {
                     0 -> openMusic(tracks, 0, name)
-                    1 -> { if (!Downloads.startBatch(this, tracks, AUDIO_QUALITY)) toast(getString(R.string.one_at_a_time)) else toast(getString(R.string.batch_started)) }
+                    1 -> { Downloads.startBatch(this, tracks, AUDIO_QUALITY); toast(getString(R.string.dl_batch_queued, tracks.size)) }
                     2 -> confirmDeletePlaylist(name)
                 }
             }
@@ -1032,34 +1051,101 @@ class MainActivity : AppCompatActivity() {
     private fun downloadMp3(item: VideoItem) = launchDownload(item, AUDIO_QUALITY)
 
     private fun launchDownload(item: VideoItem, quality: Quality) {
-        if (!Downloads.start(this, item, quality)) toast(getString(R.string.one_at_a_time))
-        else toast(getString(R.string.download_started))
+        Downloads.start(this, item, quality)
+        toast(getString(R.string.download_queued))
     }
 
-    private fun renderDownloadState(state: Downloads.State) {
-        val visible = state.running || state.message != null || state.error != null
-        ui.downloadCard.isVisible = visible
-        if (!visible) return
-        ui.downloadLabel.text = state.label
-        ui.downloadProgress.isVisible = state.running
-        if (state.running) {
-            ui.downloadProgress.isIndeterminate = state.percent < 0
-            if (state.percent >= 0) ui.downloadProgress.setProgressCompat(state.percent, true)
-            ui.downloadStatus.text =
-                if (state.percent >= 0) getString(R.string.downloading, state.percent)
-                else getString(R.string.processing)
-        } else {
-            ui.downloadStatus.text = state.message ?: state.error
+    /** Télécharge en lot les dernières vidéos de la chaîne d'une vidéo. */
+    private fun downloadChannel(item: VideoItem) {
+        val url = Engine.channelFromVideo(item)?.url ?: item.channelUrl
+        if (url == null) { openChannelFromVideo(item); return }
+        toast(getString(R.string.dl_fetching_channel))
+        lifecycleScope.launch {
+            val vids = runCatching { Engine.channelVideos(this@MainActivity, url, 30) }
+                .getOrDefault(emptyList())
+            if (vids.isEmpty()) { toast(getString(R.string.no_results)); return@launch }
+            askBatchQuality(vids)
         }
-        // Rebond de célébration quand un téléchargement vient de se terminer.
-        if (wasDownloading && !state.running && state.error == null) {
+    }
+
+    /** Choix de qualité puis mise en file d'un lot complet. */
+    private fun askBatchQuality(items: List<VideoItem>) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.dl_batch_count, items.size))
+            .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
+                Downloads.startBatch(this, items, QUALITIES[index])
+                toast(getString(R.string.dl_batch_queued, items.size))
+            }
+            .show()
+    }
+
+    /** Reflète la file de téléchargements sur la carte partagée (+ feuille détaillée). */
+    private fun renderDownloads() {
+        val active = Downloads.active()
+        val total = Downloads.totalCount()
+        val done = Downloads.doneCount()
+        val errors = Downloads.jobs().count { it.status == Downloads.Status.ERROR }
+        val busy = Downloads.hasActive()
+        val visible = total > 0
+        ui.downloadCard.isVisible = visible
+        // Rafraîchit la feuille ouverte, le cas échéant.
+        dlQueueAdapter?.submit(Downloads.jobs())
+        dlQueueEmptyView?.isVisible = Downloads.jobs().isEmpty()
+        if (!visible) { wasDownloading = false; return }
+
+        val remaining = total - done - errors
+        ui.downloadLabel.text = active?.item?.title ?: getString(R.string.dl_all_done)
+        val running = active?.status == Downloads.Status.RUNNING
+        ui.downloadProgress.isVisible = running
+        if (running) {
+            val p = active?.percent ?: -1
+            ui.downloadProgress.isIndeterminate = p < 0
+            if (p >= 0) ui.downloadProgress.setProgressCompat(p, true)
+        }
+        ui.downloadStatus.text = when {
+            busy && remaining > 1 -> getString(R.string.dl_status_summary, done + 1, total)
+            running && (active?.percent ?: -1) >= 0 -> getString(R.string.downloading, active!!.percent)
+            busy -> getString(R.string.processing)
+            errors > 0 -> getString(R.string.dl_status_summary_errors, done, total)
+            else -> getString(R.string.dl_status_all_done, done)
+        }
+
+        // Rebond de célébration à la fin de toute la file.
+        if (wasDownloading && !busy && errors == 0) {
             ui.downloadCard.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
             ui.downloadCard.animate().scaleX(1.03f).scaleY(1.03f).setDuration(130)
                 .withEndAction {
                     ui.downloadCard.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
                 }.start()
         }
-        wasDownloading = state.running
+        wasDownloading = busy
+    }
+
+    private var dlQueueAdapter: DownloadAdapter? = null
+    private var dlQueueEmptyView: View? = null
+
+    /** Feuille détaillée de la file : réessayer / retirer, effacer les terminés. */
+    private fun openDownloadQueue() {
+        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val view = layoutInflater.inflate(R.layout.sheet_downloads, null)
+        sheet.setContentView(view)
+        val list = view.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.dlQueueList)
+        val empty = view.findViewById<View>(R.id.dlQueueEmpty)
+        val adapter = DownloadAdapter(
+            onRetry = { Downloads.retry(this, it.id) },
+            onRemove = { Downloads.remove(this, it.id) },
+        )
+        list.layoutManager = LinearLayoutManager(this)
+        list.adapter = adapter
+        adapter.submit(Downloads.jobs())
+        empty.isVisible = Downloads.jobs().isEmpty()
+        view.findViewById<View>(R.id.dlClearFinished).setOnClickListener {
+            Downloads.clearFinished(this)
+        }
+        dlQueueAdapter = adapter
+        dlQueueEmptyView = empty
+        sheet.setOnDismissListener { dlQueueAdapter = null; dlQueueEmptyView = null }
+        sheet.show()
     }
 
     // ---------- HISTORIQUE ----------
