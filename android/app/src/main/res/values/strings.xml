@@ -145,6 +145,9 @@
     <string name="now_playing">EN LECTURE</string>
     <string name="up_next">File d\'attente</string>
     <string name="queue_reorder_hint">Glissez pour réordonner · balayez pour retirer</string>
+    <string name="equalizer">Égaliseur</string>
+    <string name="eq_off">Désactivé</string>
+    <string name="eq_unavailable">Égaliseur indisponible sur cet appareil.</string>
     <string name="shuffle">Lecture aléatoire</string>
     <string name="previous">Précédent</string>
     <string name="next">Suivant</string>

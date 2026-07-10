@@ -19,6 +19,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import androidx.palette.graphics.Palette
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -108,6 +109,7 @@ class MusicPlayerActivity : AppCompatActivity() {
         ui.lyricsButton.setOnClickListener { toggleLyrics() }
         ui.lyricsClose.setOnClickListener { ui.lyricsPanel.isVisible = false }
         ui.sleepButton.setOnClickListener { showSleepDialog() }
+        ui.eqButton.setOnClickListener { openEqualizer() }
 
         ui.lyricsList.layoutManager = LinearLayoutManager(this)
         ui.lyricsList.adapter = lyricsAdapter
@@ -431,6 +433,36 @@ class MusicPlayerActivity : AppCompatActivity() {
 
     private fun updateSleepIcon() {
         ui.sleepButton.setIconTintResource(if (sleepActive) R.color.accent2 else R.color.text_dim)
+    }
+
+    // ---------- Égaliseur ----------
+
+    private fun openEqualizer() {
+        val c = controller ?: return
+        val future = c.sendCustomCommand(SessionCommand(MusicService.CMD_EQ_LIST, Bundle.EMPTY), Bundle.EMPTY)
+        future.addListener({
+            val res = runCatching { future.get() }.getOrNull()
+            val presets = res?.extras?.getStringArray("presets") ?: emptyArray()
+            val current = res?.extras?.getInt("current", -1) ?: -1
+            showEqDialog(presets, current)
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun showEqDialog(presets: Array<String>, current: Int) {
+        if (presets.isEmpty()) { toast(getString(R.string.eq_unavailable)); return }
+        val labels = (listOf(getString(R.string.eq_off)) + presets).toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.equalizer)
+            .setSingleChoiceItems(labels, current + 1) { d, which ->
+                controller?.sendCustomCommand(
+                    SessionCommand(MusicService.CMD_EQ_SET, Bundle.EMPTY),
+                    Bundle().apply { putInt("preset", which - 1) },
+                )
+                ui.eqButton.setIconTintResource(if (which > 0) R.color.accent2 else R.color.text)
+                d.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun toggleFav() {

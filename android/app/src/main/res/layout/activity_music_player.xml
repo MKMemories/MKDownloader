@@ -65,6 +65,15 @@
                 app:iconTint="@color/text_dim" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/eqButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/equalizer"
+                app:icon="@drawable/ic_equalizer"
+                app:iconTint="@color/text" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/queueButton"
                 style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="wrap_content"

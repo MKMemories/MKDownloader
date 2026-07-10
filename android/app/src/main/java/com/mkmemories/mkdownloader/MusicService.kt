@@ -1,5 +1,6 @@
 package com.mkmemories.mkdownloader
 
+import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -48,6 +49,7 @@ import kotlinx.coroutines.runBlocking
 class MusicService : MediaLibraryService() {
 
     private var session: MediaLibrarySession? = null
+    private var equalizer: Equalizer? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     // Cache nœud → morceaux (permet d'étendre un titre tapé à toute sa file).
     private val browseCache = HashMap<String, List<VideoItem>>()
@@ -120,6 +122,10 @@ class MusicService : MediaLibraryService() {
                 }
             }
         })
+        equalizer = runCatching {
+            val sid = player.audioSessionId
+            if (sid != C.AUDIO_SESSION_ID_UNSET) Equalizer(0, sid).apply { enabled = false } else null
+        }.getOrNull()
         session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
         watchdog.post(watchdogRun)
     }
@@ -128,6 +134,8 @@ class MusicService : MediaLibraryService() {
 
     override fun onDestroy() {
         watchdog.removeCallbacks(watchdogRun)
+        runCatching { equalizer?.release() }
+        equalizer = null
         session?.run { player.release(); release() }
         session = null
         scope.cancel()
@@ -145,6 +153,8 @@ class MusicService : MediaLibraryService() {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
                 .add(SessionCommand(CMD_FAV, Bundle.EMPTY))
+                .add(SessionCommand(CMD_EQ_LIST, Bundle.EMPTY))
+                .add(SessionCommand(CMD_EQ_SET, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -158,15 +168,37 @@ class MusicService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == CMD_FAV) {
-                session.player.currentMediaItem?.let {
-                    Favorites.toggleVideo(this@MusicService, videoFromMediaItem(it))
-                    browseCache.remove(NODE_FAVORITES)
-                    this@MusicService.session?.notifyChildrenChanged(
-                        NODE_FAVORITES, Favorites.videos(this@MusicService).size, null
-                    )
+            when (customCommand.customAction) {
+                CMD_FAV -> {
+                    session.player.currentMediaItem?.let {
+                        Favorites.toggleVideo(this@MusicService, videoFromMediaItem(it))
+                        browseCache.remove(NODE_FAVORITES)
+                        this@MusicService.session?.notifyChildrenChanged(
+                            NODE_FAVORITES, Favorites.videos(this@MusicService).size, null
+                        )
+                    }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                CMD_EQ_LIST -> {
+                    val eq = equalizer
+                    val n = eq?.numberOfPresets?.toInt() ?: 0
+                    val names = Array(n) { eq!!.getPresetName(it.toShort()) }
+                    val extras = Bundle().apply {
+                        putStringArray("presets", names)
+                        putInt("current", if (eq?.enabled == true) eq.currentPreset.toInt() else -1)
+                    }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, extras))
+                }
+                CMD_EQ_SET -> {
+                    val preset = args.getInt("preset", -1)
+                    runCatching {
+                        equalizer?.let {
+                            if (preset < 0) it.enabled = false
+                            else { it.usePreset(preset.toShort()); it.enabled = true }
+                        }
+                    }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
         }
@@ -390,6 +422,8 @@ class MusicService : MediaLibraryService() {
         private const val NODE_SEARCH = "search"
         private const val PL_PREFIX = "pl:"
         private const val CMD_FAV = "com.mkmemories.mkdownloader.FAV"
+        const val CMD_EQ_LIST = "com.mkmemories.mkdownloader.EQ_LIST"
+        const val CMD_EQ_SET = "com.mkmemories.mkdownloader.EQ_SET"
         private const val SEP = "::mk::"
         private const val SCHEME = "ytdlp"
         private const val Q_FR = "top chansons françaises du moment 2026"
