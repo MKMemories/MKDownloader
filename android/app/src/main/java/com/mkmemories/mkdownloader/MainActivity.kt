@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.isVisible
 import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
@@ -57,6 +58,7 @@ class MainActivity : AppCompatActivity() {
     // Mini-lecteur : contrôleur média branché sur le service musical.
     private var miniControllerFuture: ListenableFuture<MediaController>? = null
     private var miniController: MediaController? = null
+    private var miniArtUri: String? = null
     private val miniListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = refreshMini()
     }
@@ -107,6 +109,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         ui = ActivityMainBinding.inflate(layoutInflater)
         setContentView(ui.root)
@@ -228,10 +231,30 @@ class MainActivity : AppCompatActivity() {
         if (!hasTrack) return
         ui.miniTitle.text = md?.title ?: ""
         ui.miniArtist.text = md?.artist ?: ""
-        md?.artworkUri?.let { ui.miniArt.load(it) }
+        val art = md?.artworkUri?.toString()
+        if (art != null && art != miniArtUri) { miniArtUri = art; loadMiniArt(art) }
         ui.miniPlayPause.setIconResource(
             if (c!!.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
+    }
+
+    /** Couleur dynamique : le mini-lecteur se pare de la couleur de la pochette. */
+    private fun loadMiniArt(url: String) {
+        val fallback = ContextCompat.getColor(this, R.color.accent2)
+        val request = coil.request.ImageRequest.Builder(this)
+            .data(url)
+            .allowHardware(false)
+            .target { drawable ->
+                ui.miniArt.setImageDrawable(drawable)
+                (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.let { bmp ->
+                    androidx.palette.graphics.Palette.from(bmp).generate { p ->
+                        val col = p?.getVibrantColor(p.getDominantColor(fallback)) ?: fallback
+                        ui.miniPlayer.strokeColor = col
+                    }
+                }
+            }
+            .build()
+        coil.ImageLoader(this).enqueue(request)
     }
 
     override fun onNewIntent(intent: Intent) {
