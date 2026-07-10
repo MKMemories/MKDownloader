@@ -95,6 +95,7 @@ object Downloads {
             workDir.mkdirs()
             val request = YoutubeDLRequest(item.url).apply {
                 addOption("--no-playlist")
+                addOption("--extractor-args", Engine.YT_ARGS)
                 addOption("-f", quality.format)
                 if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
                 if (quality.audioMp3) {

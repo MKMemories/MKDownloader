@@ -35,6 +35,11 @@ object Engine {
     @Volatile private var ready = false
     private val mutex = Mutex()
 
+    // Clients d'extraction YouTube. Le client « android » est désormais bloqué
+    // par YouTube (« Sign in to confirm you're not a bot »). On tente plusieurs
+    // clients robustes ; yt-dlp bascule sur le premier qui répond.
+    const val YT_ARGS = "youtube:player_client=default,tv,mweb"
+
     suspend fun ensureReady(context: Context) = withContext(Dispatchers.IO) {
         if (ready) return@withContext
         mutex.withLock {
@@ -56,7 +61,10 @@ object Engine {
     // ---------- Helpers ----------
 
     private fun runJson(target: String, configure: YoutubeDLRequest.() -> Unit): JSONObject {
-        val request = YoutubeDLRequest(target).apply(configure)
+        val request = YoutubeDLRequest(target).apply {
+            addOption("--extractor-args", YT_ARGS)
+            configure()
+        }
         val out = YoutubeDL.getInstance().execute(request, null, null).out
         val start = out.indexOf('{')
         require(start >= 0) { "Réponse inattendue de yt-dlp." }
@@ -221,7 +229,7 @@ object Engine {
             val request = YoutubeDLRequest(url).apply {
                 addOption("--no-playlist"); addOption("--no-warnings")
                 addOption("-f", "b[ext=mp4][height<=1080]/b[ext=mp4]/b[height<=720]/best")
-                addOption("--extractor-args", "youtube:player_client=android")
+                addOption("--extractor-args", YT_ARGS)
                 applyCreds(context, url)
                 addOption("-g")
             }
@@ -243,7 +251,7 @@ object Engine {
             val request = YoutubeDLRequest(url).apply {
                 addOption("--no-playlist"); addOption("--no-warnings")
                 addOption("-f", fmt)
-                addOption("--extractor-args", "youtube:player_client=android")
+                addOption("--extractor-args", YT_ARGS)
                 applyCreds(context, url)
                 addOption("-g")
             }
@@ -265,7 +273,7 @@ object Engine {
                 addOption("-f", "ba[ext=m4a]/ba[acodec^=mp4a]/b[ext=mp4]/ba/b")
                 // Client "android" : URLs directement lisibles, NON limitées
                 // (évite le débit en à-coups / coupures toutes les ~10 s).
-                addOption("--extractor-args", "youtube:player_client=android")
+                addOption("--extractor-args", YT_ARGS)
                 addOption("-g")
             }
             YoutubeDL.getInstance().execute(request, null, null).out
