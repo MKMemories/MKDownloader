@@ -268,7 +268,7 @@
     <string name="dlna_ok">Envoyé vers %1$s</string>
     <string name="dlna_fail">Échec de la diffusion vers %1$s</string>
     <string name="dlna_not_ready">Lecture pas encore prête.</string>
-    <string name="dlna_local_unsupported">Les fichiers locaux ne sont pas diffusables en DLNA (bientôt).</string>
+    <string name="dlna_local_unsupported">Impossible de préparer ce fichier pour la diffusion (Wi-Fi requis).</string>
     <string name="upd_available">Nouvelle version %1$s disponible</string>
     <string name="upd_message">Une version plus récente de l\'application est disponible. La télécharger et l\'installer maintenant ?</string>
     <string name="upd_now">Mettre à jour</string>

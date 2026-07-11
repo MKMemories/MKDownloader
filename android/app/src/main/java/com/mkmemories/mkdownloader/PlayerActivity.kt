@@ -41,6 +41,7 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.mkmemories.mkdownloader.databinding.ActivityPlayerBinding
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Lecteur vidéo : portrait « à la YouTube » + plein écran, qualité, extrait, Cast. */
 @UnstableApi
@@ -553,26 +554,38 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     // ---------- Diffusion DLNA (TV non-Chromecast : Samsung, etc.) ----------
 
     private fun castDlna() {
-        val url = sources.firstOrNull()
-        if (url.isNullOrEmpty()) { toast(getString(R.string.dlna_not_ready)); return }
-        if (url.startsWith("content://") || url.startsWith("file://")) {
-            toast(getString(R.string.dlna_local_unsupported)); return
-        }
+        val src = sources.firstOrNull()
+        if (src.isNullOrEmpty()) { toast(getString(R.string.dlna_not_ready)); return }
         toast(getString(R.string.dlna_searching))
         lifecycleScope.launch {
             val devices = Dlna.discover(this@PlayerActivity)
             if (devices.isEmpty()) { toast(getString(R.string.dlna_none)); return@launch }
+            // Fichier local → publié par le mini-serveur HTTP ; flux distant → tel quel.
+            val prepared = withContext(kotlinx.coroutines.Dispatchers.IO) { prepareCastUrl(src) }
+            if (prepared == null) { toast(getString(R.string.dlna_local_unsupported)); return@launch }
+            val (castUrl, mime) = prepared
             val names = devices.map { it.name }.toTypedArray()
             MaterialAlertDialogBuilder(this@PlayerActivity)
                 .setTitle(R.string.dlna_choose)
                 .setItems(names) { _, i ->
                     lifecycleScope.launch {
-                        val ok = Dlna.cast(devices[i], url, videoTitle, mimeFor(url))
+                        val ok = Dlna.cast(devices[i], castUrl, videoTitle, mime)
                         toast(getString(if (ok) R.string.dlna_ok else R.string.dlna_fail, devices[i].name))
                     }
                 }
                 .show()
         }
+    }
+
+    /** Renvoie (URL diffusable, mime) : sert les fichiers locaux via MediaServer. */
+    private fun prepareCastUrl(src: String): Pair<String, String>? {
+        if (src.startsWith("content://") || src.startsWith("file://")) {
+            val uri = android.net.Uri.parse(src)
+            val mime = contentResolver.getType(uri) ?: "video/mp4"
+            val url = MediaServer.serve(this, uri, mime, videoTitle) ?: return null
+            return url to mime
+        }
+        return src to mimeFor(src)
     }
 
     private fun mimeFor(url: String): String = when {
