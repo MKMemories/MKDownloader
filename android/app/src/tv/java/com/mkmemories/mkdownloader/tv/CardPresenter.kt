@@ -1,10 +1,12 @@
 package com.mkmemories.mkdownloader.tv
 
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
 import coil.load
 import com.mkmemories.mkdownloader.HistoryEntry
+import com.mkmemories.mkdownloader.R
 import com.mkmemories.mkdownloader.TvChannel
 import com.mkmemories.mkdownloader.VideoItem
 
@@ -16,6 +18,8 @@ class CardPresenter : Presenter() {
             isFocusable = true
             isFocusableInTouchMode = true
             setMainImageDimensions(CARD_W, CARD_H)
+            // Bandeau d'info sombre premium (cohérent avec l'app).
+            setInfoAreaBackgroundColor(ContextCompat.getColor(context, R.color.card))
         }
         return ViewHolder(card)
     }
@@ -45,7 +49,7 @@ class CardPresenter : Presenter() {
     }
 
     private companion object {
-        const val CARD_W = 320
-        const val CARD_H = 180
+        const val CARD_W = 352
+        const val CARD_H = 198
     }
 }
