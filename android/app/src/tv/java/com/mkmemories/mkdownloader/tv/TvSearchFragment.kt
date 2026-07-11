@@ -26,10 +26,8 @@ class TvSearchFragment : SearchSupportFragment(), SearchSupportFragment.SearchRe
         setSearchResultProvider(this)
         setOnItemViewClickedListener { _, item, _, _ ->
             if (item is VideoItem) startActivity(
-                Intent(requireContext(), PlayerActivity::class.java).apply {
-                    putExtra(PlayerActivity.EXTRA_URL, item.url)
-                    putExtra(PlayerActivity.EXTRA_TITLE, item.title)
-                    putExtra(PlayerActivity.EXTRA_TV, true)
+                Intent(requireContext(), TvDetailActivity::class.java).apply {
+                    putExtra(TvDetailActivity.EXTRA_ITEM, item.toJson().toString())
                 }
             )
         }

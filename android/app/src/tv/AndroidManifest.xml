@@ -28,5 +28,11 @@
             android:exported="false"
             android:screenOrientation="landscape"
             android:theme="@style/Theme.MKTv" />
+
+        <activity
+            android:name=".tv.TvDetailActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.MKTv" />
     </application>
 </manifest>

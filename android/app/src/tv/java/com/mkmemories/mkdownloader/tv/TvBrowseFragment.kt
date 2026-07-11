@@ -116,10 +116,8 @@ class TvBrowseFragment : BrowseSupportFragment() {
     private fun onItemClicked(item: Any?) {
         val ctx = requireContext()
         when (item) {
-            is VideoItem -> startActivity(Intent(ctx, PlayerActivity::class.java).apply {
-                putExtra(PlayerActivity.EXTRA_URL, item.url)
-                putExtra(PlayerActivity.EXTRA_TITLE, item.title)
-                putExtra(PlayerActivity.EXTRA_TV, true)
+            is VideoItem -> startActivity(Intent(ctx, TvDetailActivity::class.java).apply {
+                putExtra(TvDetailActivity.EXTRA_ITEM, item.toJson().toString())
             })
             is TvChannel -> startActivity(Intent(ctx, PlayerActivity::class.java).apply {
                 putExtra(PlayerActivity.EXTRA_URL, item.url)
