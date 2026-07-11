@@ -139,6 +139,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         ui.descToggle.setOnClickListener { toggleDescription() }
         ui.pipButton.setOnClickListener { enterPip() }
         ui.pipButton.isVisible = hasPip()
+        ui.dlnaButton.setOnClickListener { castDlna() }
         refreshFavLabel()
 
         // Edge-to-edge (Android 15) : réserve la barre de navigation en bas du
@@ -548,6 +549,38 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     /** AAAAMMJJ → « JJ/MM/AAAA ». */
     private fun prettyDate(d: String): String =
         if (d.length == 8) "${d.substring(6, 8)}/${d.substring(4, 6)}/${d.substring(0, 4)}" else d
+
+    // ---------- Diffusion DLNA (TV non-Chromecast : Samsung, etc.) ----------
+
+    private fun castDlna() {
+        val url = sources.firstOrNull()
+        if (url.isNullOrEmpty()) { toast(getString(R.string.dlna_not_ready)); return }
+        if (url.startsWith("content://") || url.startsWith("file://")) {
+            toast(getString(R.string.dlna_local_unsupported)); return
+        }
+        toast(getString(R.string.dlna_searching))
+        lifecycleScope.launch {
+            val devices = Dlna.discover(this@PlayerActivity)
+            if (devices.isEmpty()) { toast(getString(R.string.dlna_none)); return@launch }
+            val names = devices.map { it.name }.toTypedArray()
+            MaterialAlertDialogBuilder(this@PlayerActivity)
+                .setTitle(R.string.dlna_choose)
+                .setItems(names) { _, i ->
+                    lifecycleScope.launch {
+                        val ok = Dlna.cast(devices[i], url, videoTitle, mimeFor(url))
+                        toast(getString(if (ok) R.string.dlna_ok else R.string.dlna_fail, devices[i].name))
+                    }
+                }
+                .show()
+        }
+    }
+
+    private fun mimeFor(url: String): String = when {
+        url.contains(".m3u8") || url.contains("/manifest/hls") -> "application/vnd.apple.mpegurl"
+        url.contains(".mpd") -> "application/dash+xml"
+        url.contains(".webm") -> "video/webm"
+        else -> "video/mp4"
+    }
 
     // ---------- Cast ----------
 
