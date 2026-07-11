@@ -253,6 +253,13 @@
     <string name="pip">Mode fenêtre</string>
     <string name="resume_at">Reprise à %1$s</string>
     <string name="quality_max">Qualité (Max)</string>
+    <string name="player_mp3">MP3</string>
+    <string name="player_playlist">Playlist</string>
+    <string name="player_fav">Favori</string>
+    <string name="player_description">Description</string>
+    <string name="see_more">Voir plus ▾</string>
+    <string name="see_less">Voir moins ▴</string>
+    <string name="player_views">%1$s vues</string>
     <string name="quality_label">Qualité (%1$s)</string>
     <string name="choose_stream_quality">Qualité de lecture</string>
     <string name="clip_title">Télécharger un extrait</string>

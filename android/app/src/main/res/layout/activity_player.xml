@@ -6,6 +6,14 @@
     android:background="@drawable/player_bg"
     android:orientation="vertical">
 
+    <!-- Hero : bandeau de marque, cohérent avec la page recherche (masqué en plein écran). -->
+    <ImageView
+        android:id="@+id/heroBanner"
+        android:layout_width="match_parent"
+        android:layout_height="88dp"
+        android:contentDescription="@string/app_name"
+        android:scaleType="centerCrop" />
+
     <!-- Cadre vidéo premium (hauteur ajustée en 16:9 en portrait, plein écran en paysage) -->
     <FrameLayout
         android:id="@+id/videoContainer"
@@ -140,6 +148,16 @@
                 android:textSize="17sp"
                 android:textStyle="bold" />
 
+            <!-- Méta premium : chaîne · vues · date -->
+            <TextView
+                android:id="@+id/panelMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_dim"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -165,11 +183,54 @@
                     android:text="@string/download" />
             </LinearLayout>
 
+            <!-- Ligne d'actions enrichie : MP3, playlist, favori -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/mp3Button"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="6dp"
+                    app:icon="@android:drawable/ic_lock_silent_mode_off"
+                    android:text="@string/player_mp3" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/playlistButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="6dp"
+                    app:icon="@android:drawable/ic_input_add"
+                    android:text="@string/player_playlist" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/favButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="6dp"
+                    app:icon="@android:drawable/btn_star_big_off"
+                    android:text="@string/player_fav" />
+            </LinearLayout>
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginVertical="18dp"
-                android:background="@color/card" />
+                android:background="@color/card_hi" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -231,6 +292,51 @@
                 android:enabled="false"
                 app:icon="@android:drawable/ic_menu_save"
                 android:text="@string/download_clip" />
+
+            <!-- Description de la vidéo (repliable) -->
+            <View
+                android:id="@+id/descDivider"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginVertical="18dp"
+                android:background="@color/card_hi"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/descHeader"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/player_description"
+                android:textColor="@color/text"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/descBody"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:autoLink="web"
+                android:ellipsize="end"
+                android:maxLines="5"
+                android:lineSpacingMultiplier="1.15"
+                android:textColor="@color/text_dim"
+                android:textColorLink="@color/accent2"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/descToggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:paddingVertical="4dp"
+                android:text="@string/see_more"
+                android:textColor="@color/accent2"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
         </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </ScrollView>

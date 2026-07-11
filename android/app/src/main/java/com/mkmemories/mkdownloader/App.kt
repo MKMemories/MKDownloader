@@ -129,6 +129,28 @@ object Engine {
         )
     }
 
+    /** Détails enrichis d'une vidéo (pour le lecteur premium) : description + méta. */
+    data class VideoDetails(
+        val description: String?,
+        val uploader: String?,
+        val viewCount: Long?,
+        val uploadDate: String?, // AAAAMMJJ
+    )
+
+    suspend fun details(context: Context, url: String): VideoDetails = withContext(Dispatchers.IO) {
+        ensureReady(context)
+        val o = runJson(url) {
+            addOption("--no-playlist"); addOption("--no-warnings"); addOption("--dump-single-json")
+            applyCreds(context, url)
+        }
+        VideoDetails(
+            description = o.optStringOrNull("description"),
+            uploader = o.optStringOrNull("uploader") ?: o.optStringOrNull("channel"),
+            viewCount = o.optLong("view_count", -1L).takeIf { it >= 0 },
+            uploadDate = o.optStringOrNull("upload_date"),
+        )
+    }
+
     /**
      * Passage le plus **revisionné** d'une vidéo (« moment fort »), calculé à
      * partir des données *most replayed* de YouTube (champ `heatmap`). Renvoie

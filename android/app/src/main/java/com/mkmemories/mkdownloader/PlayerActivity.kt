@@ -22,6 +22,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import coil.load
 import kotlin.math.roundToInt
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
@@ -64,6 +65,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     private var durationSec = 0
     private var sources: List<String> = emptyList()
     private var speed = 1f
+    private var detailUploader: String? = null
+    private var descExpanded = false
 
     private val qualityOptions = listOf(
         2160 to "4K (max)", 1080 to "1080p", 720 to "720p", 480 to "480p", 360 to "360p"
@@ -118,16 +121,22 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         live = intent.getBooleanExtra(EXTRA_LIVE, false)
 
         ui.clipRange.values = listOf(0f, 100f) // valeurs initiales (requis par RangeSlider)
+        ui.heroBanner.load(R.drawable.hero)
         ui.panelTitle.text = videoTitle
         ui.closeButton.setOnClickListener { finish() }
         ui.fullscreenButton.setOnClickListener { if (fullscreen) exitFullscreen() else enterFullscreen() }
         ui.qualityButton.setOnClickListener { chooseQuality() }
         ui.downloadButton.setOnClickListener { askQualityAndDownload(null, null) }
+        ui.mp3Button.setOnClickListener { downloadMp3() }
+        ui.playlistButton.setOnClickListener { addToPlaylist() }
+        ui.favButton.setOnClickListener { toggleFav() }
         ui.downloadClipButton.setOnClickListener { downloadClip() }
         ui.clipRange.addOnChangeListener { _, _, _ -> updateClipLabels() }
         ui.speedButton.setOnClickListener { chooseSpeed() }
+        ui.descToggle.setOnClickListener { toggleDescription() }
         ui.pipButton.setOnClickListener { enterPip() }
         ui.pipButton.isVisible = hasPip()
+        refreshFavLabel()
         @Suppress("ClickableViewAccessibility")
         ui.playerView.setOnTouchListener { _, ev -> gestureDetector.onTouchEvent(ev) }
         setupCastButton()
@@ -143,12 +152,41 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         if (live || direct) {
             // Direct TV : plein écran paysage immersif d'emblée, sans panneau.
             ui.panel.isVisible = false
+            ui.heroBanner.isVisible = false
             enterFullscreen()
         } else {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             setPortraitVideoSize()
         }
         resolveAndPlay()
+    }
+
+    /** Charge en arrière-plan la description + la méta (chaîne · vues · date). */
+    private fun loadDetails() {
+        lifecycleScope.launch {
+            val d = runCatching { Engine.details(this@PlayerActivity, videoUrl) }.getOrNull() ?: return@launch
+            detailUploader = d.uploader
+            val meta = listOfNotNull(
+                d.uploader?.takeIf { it.isNotBlank() },
+                d.viewCount?.let { getString(R.string.player_views, compactCount(it)) },
+                d.uploadDate?.let(::prettyDate),
+            ).joinToString("  ·  ")
+            if (meta.isNotEmpty()) { ui.panelMeta.text = meta; ui.panelMeta.isVisible = true }
+            val desc = d.description?.trim().orEmpty()
+            if (desc.isNotEmpty()) {
+                ui.descBody.text = desc
+                ui.descDivider.isVisible = true
+                ui.descHeader.isVisible = true
+                ui.descBody.isVisible = true
+                // Le bouton « Voir plus » n'apparaît que si le texte est réellement tronqué.
+                ui.descBody.post {
+                    val l = ui.descBody.layout ?: return@post
+                    if (l.lineCount > 0 && l.getEllipsisCount(l.lineCount - 1) > 0) {
+                        ui.descToggle.isVisible = true
+                    }
+                }
+            }
+        }
     }
 
     // ---------- Dimensions / plein écran ----------
@@ -164,6 +202,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         fullscreen = true
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         ui.panel.isVisible = false
+        ui.heroBanner.isVisible = false
         ui.fullscreenButton.setIconResource(android.R.drawable.ic_menu_view)
         ui.videoContainer.layoutParams = ui.videoContainer.layoutParams.apply {
             height = ViewGroup.LayoutParams.MATCH_PARENT
@@ -181,6 +220,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         WindowInsetsControllerCompat(window, ui.root).show(WindowInsetsCompat.Type.systemBars())
         ui.panel.isVisible = true
+        ui.heroBanner.isVisible = true
         ui.fullscreenButton.setIconResource(android.R.drawable.ic_menu_crop)
         setPortraitVideoSize()
     }
@@ -204,6 +244,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
             buildAndPlay(startAt)
             if (startAt > 0) toast(getString(R.string.resume_at, fmt((startAt / 1000).toInt())))
             ui.playerLoading.isVisible = false
+            // Enrichissement premium (description + méta) une fois la lecture lancée.
+            if (!live && !direct) loadDetails()
         }
     }
 
@@ -348,6 +390,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         ui.playerView.useController = !inPip
         ui.topBar.isVisible = !inPip
         ui.fullscreenButton.isVisible = !inPip
+        if (inPip) ui.heroBanner.isVisible = false
+        else if (!fullscreen && !live) ui.heroBanner.isVisible = true
         if (!live) ui.panel.isVisible = !inPip && !fullscreen
         if (inPip) {
             ui.videoContainer.layoutParams = ui.videoContainer.layoutParams.apply {
@@ -403,14 +447,94 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_quality)
             .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
-                Downloads.start(
-                    this, VideoItem(videoUrl, videoTitle, null, 0, null),
-                    QUALITIES[index], startSec, endSec,
-                )
+                Downloads.start(this, currentItem(), QUALITIES[index], startSec, endSec)
                 toast(getString(R.string.download_queued))
             }
             .show()
     }
+
+    /** VideoItem courant (chaîne + miniature déduites) pour téléchargement / playlist / favori. */
+    private fun currentItem(): VideoItem {
+        val id = Clips.ytId(videoUrl)
+        val thumb = id?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
+        return VideoItem(
+            url = videoUrl, title = videoTitle, uploader = detailUploader,
+            durationSec = durationSec, thumbnail = thumb, channelName = detailUploader,
+        )
+    }
+
+    private fun downloadMp3() {
+        Downloads.start(this, currentItem(), AUDIO_QUALITY)
+        toast(getString(R.string.download_queued))
+    }
+
+    /** Ajoute la vidéo à une playlist (en crée une si aucune) pour regrouper les téléchargements. */
+    private fun addToPlaylist() {
+        val item = currentItem()
+        val names = Favorites.playlistNames(this)
+        if (names.isEmpty()) {
+            val input = androidx.appcompat.widget.AppCompatEditText(this).apply {
+                hint = getString(R.string.playlist_name); setSingleLine(true)
+            }
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.new_playlist)
+                .setView(android.widget.FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) })
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.create) { _, _ ->
+                    val name = input.text?.toString()?.trim().orEmpty()
+                    if (name.isNotEmpty()) {
+                        Favorites.addToPlaylist(this, name, item)
+                        toast(getString(R.string.added_to, name))
+                    }
+                }
+                .show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.add_to_playlist)
+            .setItems(names.toTypedArray()) { _, i ->
+                Favorites.addToPlaylist(this, names[i], item)
+                toast(getString(R.string.added_to, names[i]))
+            }
+            .show()
+    }
+
+    private fun toggleFav() {
+        Favorites.toggleVideo(this, currentItem())
+        refreshFavLabel()
+    }
+
+    private fun refreshFavLabel() {
+        val fav = Favorites.isVideoFav(this, videoUrl)
+        ui.favButton.setIconResource(
+            if (fav) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
+        )
+    }
+
+    private fun toggleDescription() {
+        descExpanded = !descExpanded
+        if (descExpanded) {
+            ui.descBody.maxLines = Integer.MAX_VALUE
+            ui.descBody.ellipsize = null
+            ui.descToggle.setText(R.string.see_less)
+        } else {
+            ui.descBody.maxLines = 5
+            ui.descBody.ellipsize = android.text.TextUtils.TruncateAt.END
+            ui.descToggle.setText(R.string.see_more)
+        }
+    }
+
+    /** 1 234 567 → « 1,2 M », 12 400 → « 12,4 k ». */
+    private fun compactCount(n: Long): String = when {
+        n >= 1_000_000 -> "%.1f M".format(n / 1_000_000.0).replace(".0", "")
+        n >= 1_000 -> "%.1f k".format(n / 1_000.0).replace(".0", "")
+        else -> n.toString()
+    }
+
+    /** AAAAMMJJ → « JJ/MM/AAAA ». */
+    private fun prettyDate(d: String): String =
+        if (d.length == 8) "${d.substring(6, 8)}/${d.substring(4, 6)}/${d.substring(0, 4)}" else d
 
     // ---------- Cast ----------
 
