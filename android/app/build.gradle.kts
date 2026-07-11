@@ -11,8 +11,8 @@ android {
         applicationId = "com.mkmemories.mkdownloader"
         minSdk = 29
         targetSdk = 35
-        versionCode = 61
-        versionName = "5.46"
+        versionCode = 62
+        versionName = "5.47"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -47,6 +47,11 @@ android {
         create("analyste") {
             dimension = "edition"
             applicationId = "com.mkmemories.analyste2027"
+        }
+        // Variante Android TV / box : interface Leanback « 10-foot » à la télécommande.
+        create("tv") {
+            dimension = "edition"
+            applicationId = "com.mkmemories.mktv"
         }
     }
 
@@ -92,4 +97,7 @@ dependencies {
     // Moteur : Python + yt-dlp + ffmpeg empaquetés pour Android.
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
+
+    // Interface Android TV « 10-foot » (uniquement pour le flavor tv).
+    "tvImplementation"("androidx.leanback:leanback:1.0.0")
 }

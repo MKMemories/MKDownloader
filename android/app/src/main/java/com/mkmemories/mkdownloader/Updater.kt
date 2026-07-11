@@ -25,8 +25,11 @@ object Updater {
 
     data class Update(val versionCode: Int, val versionName: String, val apkUrl: String)
 
-    private fun apkName(): String =
-        if (BuildConfig.FLAVOR == "analyste") "LAnalyste2027.apk" else "MKDownloader.apk"
+    private fun apkName(): String = when (BuildConfig.FLAVOR) {
+        "analyste" -> "LAnalyste2027.apk"
+        "tv" -> "MKTv.apk"
+        else -> "MKDownloader.apk"
+    }
 
     /** Renvoie la mise à jour disponible (plus récente que l'installée) ou null. */
     suspend fun check(): Update? = withContext(Dispatchers.IO) {

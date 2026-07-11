@@ -51,6 +51,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         const val EXTRA_TITLE = "title"
         const val EXTRA_DIRECT = "direct" // flux HLS direct (TV), sans yt-dlp
         const val EXTRA_LIVE = "live"     // direct TV : plein écran, sans qualité/extrait
+        const val EXTRA_TV = "tv"         // box Android TV : plein écran paysage, télécommande
     }
 
     private lateinit var ui: ActivityPlayerBinding
@@ -60,6 +61,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     private var videoTitle = ""
     private var direct = false
     private var live = false
+    private var tvMode = false
     private var fullscreen = false
     private var maxHeight = 1080
     private var durationSec = 0
@@ -119,6 +121,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         videoTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         direct = intent.getBooleanExtra(EXTRA_DIRECT, false)
         live = intent.getBooleanExtra(EXTRA_LIVE, false)
+        tvMode = intent.getBooleanExtra(EXTRA_TV, false)
 
         ui.clipRange.values = listOf(0f, 100f) // valeurs initiales (requis par RangeSlider)
         ui.heroBanner.load(R.drawable.hero)
@@ -143,16 +146,17 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (fullscreen && !live) exitFullscreen() else finish()
+                if (fullscreen && !live && !tvMode) exitFullscreen() else finish()
             }
         })
 
         if (videoUrl.isEmpty()) { finish(); return }
 
-        if (live || direct) {
-            // Direct TV : plein écran paysage immersif d'emblée, sans panneau.
+        if (live || direct || tvMode) {
+            // Direct TV / box Android TV : plein écran paysage immersif, sans panneau.
             ui.panel.isVisible = false
             ui.heroBanner.isVisible = false
+            ui.fullscreenButton.isVisible = false
             enterFullscreen()
         } else {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -245,7 +249,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
             if (startAt > 0) toast(getString(R.string.resume_at, fmt((startAt / 1000).toInt())))
             ui.playerLoading.isVisible = false
             // Enrichissement premium (description + méta) une fois la lecture lancée.
-            if (!live && !direct) loadDetails()
+            if (!live && !direct && !tvMode) loadDetails()
         }
     }
 

@@ -35,6 +35,7 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/mk/release/app-mk-release.apk MKDownloader.apk
           cp android/app/build/outputs/apk/analyste/release/app-analyste-release.apk LAnalyste2027.apk
+          cp android/app/build/outputs/apk/tv/release/app-tv-release.apk MKTv.apk
 
       - name: Génère update.json (mise à jour in-app)
         run: |
@@ -49,6 +50,7 @@ jobs:
           path: |
             MKDownloader.apk
             LAnalyste2027.apk
+            MKTv.apk
 
       # Publie (ou remplace) les APK dans une release "latest" facile à
       # télécharger depuis un téléphone.
@@ -56,8 +58,9 @@ jobs:
         with:
           tag_name: latest
           name: "MKDownloader — dernier APK"
-          body: "APK Android compilés automatiquement depuis la branche main. MKDownloader.apk = app grand public ; LAnalyste2027.apk = outil d'analyse neutre (app séparée). Installez celui voulu (autorisez les sources inconnues si demandé)."
+          body: "APK Android compilés automatiquement depuis la branche main. MKDownloader.apk = app grand public (mobile) ; LAnalyste2027.apk = outil d'analyse neutre (app séparée) ; MKTv.apk = variante Android TV / box (interface Leanback à la télécommande). Installez celui voulu (autorisez les sources inconnues si demandé)."
           files: |
             MKDownloader.apk
             LAnalyste2027.apk
+            MKTv.apk
             update.json

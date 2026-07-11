@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MK TV</string>
+    <string name="tv_title">MK TV</string>
+    <string name="tv_row_trending">Tendances</string>
+    <string name="tv_row_live">Direct TV</string>
+    <string name="tv_row_downloads">Téléchargements</string>
+    <string name="tv_search_results">Résultats : %1$s</string>
+</resources>
