@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>MK — Téléchargements</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>" />
+<style>
+  :root { --bg:#000; --card:#12141C; --card2:#1A1D28; --text:#EEF1F8; --dim:#9AA3B8; --accent:#7C5CFF; --accent2:#21C8FF; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; min-height:100vh; background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(124,92,255,.25), transparent 60%),
+      radial-gradient(900px 500px at 90% 10%, rgba(33,200,255,.15), transparent 55%), var(--bg);
+      color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      display:flex; align-items:center; justify-content:center; padding:28px 18px calc(28px + env(safe-area-inset-bottom)); }
+  .wrap { width:100%; max-width:460px; }
+  header { text-align:center; margin-bottom:26px; }
+  .logo { font-size:44px; font-weight:800; letter-spacing:2px;
+      background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text;
+      background-clip:text; color:transparent; }
+  .sub { color:var(--dim); font-size:14px; margin-top:6px; }
+  a.card { display:flex; align-items:center; gap:14px; text-decoration:none; color:var(--text);
+      background:var(--card); border:1px solid var(--card2); border-radius:20px; padding:16px 18px;
+      margin-bottom:12px; transition:transform .12s ease, border-color .12s ease, background .12s ease; }
+  a.card:active { transform:scale(.98); }
+  a.card:hover { border-color:var(--accent); background:var(--card2); }
+  .ico { width:52px; height:52px; flex:0 0 52px; border-radius:14px; display:flex; align-items:center;
+      justify-content:center; font-size:26px; background:linear-gradient(160deg,rgba(124,92,255,.35),rgba(33,200,255,.18)); }
+  .meta { flex:1; min-width:0; }
+  .t { font-weight:700; font-size:16px; }
+  .d { color:var(--dim); font-size:12.5px; margin-top:2px; }
+  .dl { color:var(--accent2); font-weight:700; font-size:20px; }
+  .foot { text-align:center; color:var(--dim); font-size:12px; margin-top:18px; line-height:1.6; }
+  .foot a { color:var(--accent2); }
+  .note { background:rgba(124,92,255,.10); border:1px solid rgba(124,92,255,.30); border-radius:14px;
+      padding:12px 14px; color:var(--dim); font-size:12.5px; margin-top:16px; line-height:1.55; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">MK</div>
+      <div class="sub">Dernières applications — installation directe</div>
+    </header>
+
+    <a class="card" href="https://github.com/MKMemories/MKDownloader/releases/latest/download/MKDownloader.apk">
+      <div class="ico">📱</div>
+      <div class="meta"><div class="t">MKDownloader</div><div class="d">Mobile — téléchargement, lecteur, musique, ciné</div></div>
+      <div class="dl">↓</div>
+    </a>
+
+    <a class="card" href="https://github.com/MKMemories/MKDownloader/releases/latest/download/MKTv.apk">
+      <div class="ico">📺</div>
+      <div class="meta"><div class="t">MK TV</div><div class="d">Box Android TV — interface télécommande</div></div>
+      <div class="dl">↓</div>
+    </a>
+
+    <a class="card" href="https://github.com/MKMemories/MKDownloader/releases/latest/download/LAnalyste2027.apk">
+      <div class="ico">🔎</div>
+      <div class="meta"><div class="t">L'Analyste 2027</div><div class="d">Outil d'analyse — transcription &amp; synthèse</div></div>
+      <div class="dl">↓</div>
+    </a>
+
+    <div class="note">
+      À la première installation, autorise « installer des applications inconnues » si Android le demande.
+      Les apps se mettent ensuite à jour toutes seules.
+    </div>
+
+    <div class="foot">
+      <a href="https://github.com/MKMemories/MKDownloader/releases/tag/latest">Toutes les versions & notes</a><br />
+      Astuce : ajoute cette page à ton écran d'accueil pour un accès en un tap.
+    </div>
+  </div>
+</body>
+</html>
