@@ -260,6 +260,14 @@
     <string name="see_more">Voir plus ▾</string>
     <string name="see_less">Voir moins ▴</string>
     <string name="player_views">%1$s vues</string>
+    <string name="upd_available">Nouvelle version %1$s disponible</string>
+    <string name="upd_message">Une version plus récente de l\'application est disponible. La télécharger et l\'installer maintenant ?</string>
+    <string name="upd_now">Mettre à jour</string>
+    <string name="upd_later">Plus tard</string>
+    <string name="upd_downloading">Téléchargement de la mise à jour…</string>
+    <string name="upd_failed">Échec de la mise à jour. Réessaie plus tard.</string>
+    <string name="upd_none">L\'application est à jour ✔</string>
+    <string name="upd_checking">Recherche d\'une mise à jour…</string>
     <string name="quality_label">Qualité (%1$s)</string>
     <string name="choose_stream_quality">Qualité de lecture</string>
     <string name="clip_title">Télécharger un extrait</string>

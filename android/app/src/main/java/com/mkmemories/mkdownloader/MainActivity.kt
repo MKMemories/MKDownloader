@@ -175,6 +175,59 @@ class MainActivity : AppCompatActivity() {
         requestNotifPermission()
         handleShareIntent(intent)
         if (intent?.action != Intent.ACTION_SEND) loadHomeFeed()
+        checkAppUpdate()
+    }
+
+    // ---------- Mise à jour de l'application (release GitHub) ----------
+
+    /** Vérifie discrètement au lancement (throttle 12 h) si une version plus récente existe. */
+    private fun checkAppUpdate(force: Boolean = false) {
+        val prefs = getSharedPreferences("mkdl_update", MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (!force && now - prefs.getLong("last_check", 0L) < 12 * 3600_000L) return
+        lifecycleScope.launch {
+            val u = runCatching { Updater.check() }.getOrNull()
+            prefs.edit().putLong("last_check", now).apply()
+            if (u == null) { if (force) toast(getString(R.string.upd_none)); return@launch }
+            // Ne pas reproposer la même version après un « Plus tard » (sauf demande manuelle).
+            if (!force && prefs.getInt("skip_vc", 0) == u.versionCode) return@launch
+            promptUpdate(u)
+        }
+    }
+
+    private fun promptUpdate(u: Updater.Update) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.upd_available, u.versionName))
+            .setMessage(R.string.upd_message)
+            .setNegativeButton(R.string.upd_later) { _, _ ->
+                getSharedPreferences("mkdl_update", MODE_PRIVATE).edit()
+                    .putInt("skip_vc", u.versionCode).apply()
+            }
+            .setPositiveButton(R.string.upd_now) { _, _ -> downloadAndInstall(u) }
+            .show()
+    }
+
+    private fun downloadAndInstall(u: Updater.Update) {
+        val bar = com.google.android.material.progressindicator.LinearProgressIndicator(this).apply {
+            isIndeterminate = false; max = 100
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.upd_downloading)
+            .setView(android.widget.FrameLayout(this).apply { setPadding(pad, pad, pad, pad); addView(bar) })
+            .setCancelable(false)
+            .show()
+        lifecycleScope.launch {
+            val file = runCatching {
+                Updater.download(this@MainActivity, u.apkUrl) { p ->
+                    runOnUiThread { bar.setProgressCompat(p, true) }
+                }
+            }.getOrNull()
+            dialog.dismiss()
+            if (file == null) { toast(getString(R.string.upd_failed)); return@launch }
+            runCatching { Updater.install(this@MainActivity, file) }
+                .onFailure { toast(getString(R.string.upd_failed)) }
+        }
     }
 
     /** Demande la permission de notification (Android 13+) pour la progression en arrière-plan. */
@@ -1000,6 +1053,7 @@ class MainActivity : AppCompatActivity() {
         }
         ui.channelCurrent.setOnClickListener { currentItem?.let { openChannelFromVideo(it) } }
         ui.updateButton.setOnClickListener { updateEngine() }
+        ui.updateButton.setOnLongClickListener { toast(getString(R.string.upd_checking)); checkAppUpdate(force = true); true }
         ui.channelBannerClose.setOnClickListener {
             ui.channelBanner.isVisible = false
             results.submit(emptyList()); ui.results.isVisible = false

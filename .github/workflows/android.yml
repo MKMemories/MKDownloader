@@ -36,6 +36,13 @@ jobs:
           cp android/app/build/outputs/apk/mk/release/app-mk-release.apk MKDownloader.apk
           cp android/app/build/outputs/apk/analyste/release/app-analyste-release.apk LAnalyste2027.apk
 
+      - name: Génère update.json (mise à jour in-app)
+        run: |
+          VC=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' android/app/build.gradle.kts | head -1)
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' android/app/build.gradle.kts | head -1)
+          printf '{"versionCode":%s,"versionName":"%s"}\n' "$VC" "$VN" > update.json
+          cat update.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: apks
@@ -53,3 +60,4 @@ jobs:
           files: |
             MKDownloader.apk
             LAnalyste2027.apk
+            update.json
