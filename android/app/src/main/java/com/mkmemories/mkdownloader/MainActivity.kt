@@ -861,11 +861,21 @@ class MainActivity : AppCompatActivity() {
             index.append("Renvoie une ligne par extrait voulu :  ID  début-fin  [libellé]\n")
             index.append("Exemple :  dQw4w9WgXcQ  12:40-14:10  Retraites\n")
             index.append("──────────────────────────────────────────\n")
+            // Squelette prêt à compléter : une ligne « ID  - » par vidéo.
+            val skeleton = StringBuilder()
+            skeleton.append("# L'ANALYSTE 2027 — EXTRAITS À COMPLÉTER\n")
+            skeleton.append("# Remplace le «  -  » par « début-fin » et ajoute un libellé.\n")
+            skeleton.append("# Ex :  dQw4w9WgXcQ  12:40-14:10  Retraites\n")
+            skeleton.append("# Duplique une ligne pour plusieurs extraits d'une même vidéo.\n")
+            skeleton.append("# Puis colle tout dans « 📋 Télécharger des extraits (liste) ».\n")
+            skeleton.append("# ─────────────────────────────────────────\n")
             for ((i, it) in items.withIndex()) {
                 ui.searchStatus.isVisible = true
                 ui.searchStatus.text = getString(R.string.an_highlights_finding, i + 1, items.size)
                 val id = Clips.idFor(it.url)
                 index.append(id).append("  ").append(it.title).append("\n")
+                skeleton.append("\n# ").append(i + 1).append(". ").append(it.title).append("\n")
+                skeleton.append(id).append("  -   \n")
                 val segs = runCatching { Engine.transcript(this@MainActivity, it.url) }.getOrDefault(emptyList())
                 if (segs.isNotEmpty()) {
                     val body = segs.joinToString("\n") { (ms, t) -> "[${fmtHms(ms)}] $t" }
@@ -873,6 +883,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             runCatching { writeAnalysteFile("00_INDEX.txt", index.toString()) }
+            runCatching { writeAnalysteFile("00_EXTRAITS_a_completer.txt", skeleton.toString()) }
             setBusy(false)
             toast(getString(R.string.an_transcribed, ok, items.size))
         }
