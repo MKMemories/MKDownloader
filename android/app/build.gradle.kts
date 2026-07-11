@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "com.mkmemories.mkdownloader"
-        minSdk = 29
+        minSdk = 24
         targetSdk = 35
-        versionCode = 67
-        versionName = "5.52"
+        versionCode = 68
+        versionName = "5.53"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

@@ -3,6 +3,7 @@ package com.mkmemories.mkdownloader
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -208,6 +209,12 @@ object Downloads {
     /** Copie le fichier dans Téléchargements/MKDownloader[/Audio] ; renvoie l'uri. */
     private fun exportToDownloads(context: Context, file: File, audio: Boolean): String {
         val subDir = if (audio) "MKDownloader/Audio" else "MKDownloader"
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) exportViaMediaStore(context, file, subDir)
+        else exportLegacy(context, file, subDir)
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    private fun exportViaMediaStore(context: Context, file: File, subDir: String): String {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + subDir)
@@ -218,6 +225,15 @@ object Downloads {
             file.inputStream().use { it.copyTo(out) }
         }
         return uri.toString()
+    }
+
+    /** Android 9 et antérieurs (ex. box Mi Box) : dossier privé de l'app, sans permission. */
+    private fun exportLegacy(context: Context, file: File, subDir: String): String {
+        val base = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), subDir)
+        base.mkdirs()
+        val dest = File(base, file.name)
+        file.inputStream().use { inp -> dest.outputStream().use { inp.copyTo(it) } }
+        return Uri.fromFile(dest).toString()
     }
 
     // ---------- Persistance de la file ----------

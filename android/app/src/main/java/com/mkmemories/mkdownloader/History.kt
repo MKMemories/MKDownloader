@@ -98,9 +98,10 @@ object History {
 
     private fun deleteFile(context: Context, entry: HistoryEntry) {
         runCatching {
-            if (entry.uri.isNotEmpty()) {
-                context.contentResolver.delete(android.net.Uri.parse(entry.uri), null, null)
-            }
+            if (entry.uri.isEmpty()) return
+            val uri = android.net.Uri.parse(entry.uri)
+            if (uri.scheme == "file") uri.path?.let { java.io.File(it).delete() }
+            else context.contentResolver.delete(uri, null, null)
         }
     }
 

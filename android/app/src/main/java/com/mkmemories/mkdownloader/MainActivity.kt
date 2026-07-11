@@ -967,20 +967,26 @@ class MainActivity : AppCompatActivity() {
         writeAnalysteFile("$id · $safeTitle.txt", header + body)
     }
 
-    /** Écrit un fichier texte dans Téléchargements/Analyste/. */
+    /** Écrit un fichier texte dans Téléchargements/Analyste/ (repli dossier privé sous Android 9-). */
     private fun writeAnalysteFile(name: String, content: String) {
         val safe = name.replace(Regex("[/\\\\:*?\"<>|]"), "_").ifBlank { "analyste.txt" }
-        val values = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safe)
-            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-            put(
-                android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
-                android.os.Environment.DIRECTORY_DOWNLOADS + "/Analyste",
-            )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safe)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                put(
+                    android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                    android.os.Environment.DIRECTORY_DOWNLOADS + "/Analyste",
+                )
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("écriture impossible")
+            contentResolver.openOutputStream(uri)!!.use { it.write(content.toByteArray()) }
+        } else {
+            val dir = java.io.File(getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "Analyste")
+            dir.mkdirs()
+            java.io.File(dir, safe).writeText(content)
         }
-        val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: error("écriture impossible")
-        contentResolver.openOutputStream(uri)!!.use { it.write(content.toByteArray()) }
     }
 
     // ---------- Machine d'extraits : import d'une liste → téléchargements ----------

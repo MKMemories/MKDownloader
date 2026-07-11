@@ -382,7 +382,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     // ---------- Picture-in-Picture ----------
 
     private fun hasPip() =
-        packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     private fun enterPip() {
         if (!hasPip()) return
