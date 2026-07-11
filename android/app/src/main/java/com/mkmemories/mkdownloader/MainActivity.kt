@@ -1053,7 +1053,7 @@ class MainActivity : AppCompatActivity() {
         }
         ui.channelCurrent.setOnClickListener { currentItem?.let { openChannelFromVideo(it) } }
         ui.updateButton.setOnClickListener { updateEngine() }
-        ui.updateButton.setOnLongClickListener { toast(getString(R.string.upd_checking)); checkAppUpdate(force = true); true }
+        ui.appUpdateButton.setOnClickListener { toast(getString(R.string.upd_checking)); checkAppUpdate(force = true) }
         ui.channelBannerClose.setOnClickListener {
             ui.channelBanner.isVisible = false
             results.submit(emptyList()); ui.results.isVisible = false

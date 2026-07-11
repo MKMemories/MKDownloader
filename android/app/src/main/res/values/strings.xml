@@ -187,6 +187,7 @@
     <string name="dl_notif_remaining">%1$d en attente</string>
     <string name="dl_notif_channel">Téléchargements</string>
     <string name="update_engine">Mettre à jour yt-dlp</string>
+    <string name="update_app">Mettre à jour l\'app</string>
     <string name="updating">Mise à jour de yt-dlp…</string>
 
     <!-- Musique -->

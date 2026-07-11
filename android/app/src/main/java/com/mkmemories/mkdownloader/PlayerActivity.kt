@@ -140,6 +140,15 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
         ui.pipButton.setOnClickListener { enterPip() }
         ui.pipButton.isVisible = hasPip()
         refreshFavLabel()
+
+        // Edge-to-edge (Android 15) : réserve la barre de navigation en bas du
+        // panneau pour que la description défile jusqu'au bout.
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(ui.panel) { v, insets ->
+            val bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            val extra = (12 * resources.displayMetrics.density).toInt()
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, bottom + extra)
+            insets
+        }
         @Suppress("ClickableViewAccessibility")
         ui.playerView.setOnTouchListener { _, ev -> gestureDetector.onTouchEvent(ev) }
         setupCastButton()
