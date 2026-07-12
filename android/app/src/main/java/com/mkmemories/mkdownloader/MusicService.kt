@@ -54,6 +54,11 @@ class MusicService : MediaLibraryService() {
     // Cache nœud → morceaux (permet d'étendre un titre tapé à toute sa file).
     private val browseCache = HashMap<String, List<VideoItem>>()
 
+    // Préchargement du titre suivant : UN SEUL à la fois (single-flight). Sans ce
+    // garde-fou, chaque saut empilait une extraction derrière le verrou → file
+    // d'attente qui explosait (jusqu'à ~60 s) et cascade de « non résolu ».
+    private var prefetchJob: kotlinx.coroutines.Job? = null
+
     // Anti-blocage : un titre premium/indisponible reste parfois « en tampon »
     // à 0:00 sans erreur. Au bout de ~15 s on saute au suivant.
     private val watchdog = Handler(Looper.getMainLooper())
@@ -65,7 +70,10 @@ class MusicService : MediaLibraryService() {
                 p.playbackState == Player.STATE_BUFFERING && p.currentPosition == 0L
             ) {
                 stallTicks++
-                if (stallTicks >= 5 && p.hasNextMediaItem()) {
+                // ~30 s : l'extraction+téléchargement local d'un titre peut prendre
+                // ~10-20 s (résolution yt-dlp sérialisée). On laisse ce délai avant
+                // de sauter, pour ne pas abandonner un titre presque prêt.
+                if (stallTicks >= 10 && p.hasNextMediaItem()) {
                     p.seekToNextMediaItem(); p.prepare(); p.play(); stallTicks = 0
                 }
             } else {
@@ -86,23 +94,38 @@ class MusicService : MediaLibraryService() {
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(30_000)
 
-        // Résout « ytdlp:<lien> » → flux audio réel, à la volée (thread de lecture).
+        // Résout « ytdlp:<lien> » → FICHIER AUDIO LOCAL, à la volée (thread de lecture).
+        // On extrait le son de la vidéo musicale vers un fichier sur le disque, puis
+        // on lit CE fichier. Avantages : plus de 403 (URL YouTube bridée/expirée),
+        // démarrage instantané à la ré-écoute, et découplage du flux fragile.
         val resolver = ResolvingDataSource.Resolver { dataSpec ->
-            if (dataSpec.uri.scheme == SCHEME) {
-                val real = dataSpec.uri.schemeSpecificPart
-                val stream = runCatching {
-                    runBlocking { Engine.audioStreamUrl(this@MusicService, real) }
-                }.getOrNull()
-                if (stream != null) {
-                    dataSpec.withUri(Uri.parse(stream))
-                } else {
-                    // Échec de résolution : on lève une erreur claire → le lecteur
-                    // passe au titre suivant (voir onPlayerError) au lieu de bloquer.
-                    Logs.w("play", "titre non résolu → suivant : $real")
-                    throw java.io.IOException("Titre indisponible : $real")
-                }
-            } else {
+            if (dataSpec.uri.scheme != SCHEME) {
                 dataSpec
+            } else {
+                val real = dataSpec.uri.schemeSpecificPart
+                // 1) Déjà extrait sur le disque → lecture locale instantanée.
+                // 2) Sinon on extrait le son vers un fichier local puis on lit ce fichier.
+                val cached = AudioCache.cached(this@MusicService, real)
+                if (cached != null) Logs.d("play", "lecture locale (cache) : $real")
+                val local = cached ?: runCatching {
+                    runBlocking { AudioCache.ensure(this@MusicService, real) }
+                }.getOrNull()
+                if (local != null) {
+                    dataSpec.withUri(Uri.fromFile(local))
+                } else {
+                    // Repli : lecture directe du flux si l'extraction a échoué.
+                    val stream = runCatching {
+                        runBlocking { Engine.audioStreamUrl(this@MusicService, real) }
+                    }.getOrNull()
+                    if (stream != null) {
+                        dataSpec.withUri(Uri.parse(stream))
+                    } else {
+                        // Échec total : on lève une erreur claire → le lecteur passe
+                        // au titre suivant (voir onPlayerError) au lieu de bloquer.
+                        Logs.w("play", "titre non résolu → suivant : $real")
+                        throw java.io.IOException("Titre indisponible : $real")
+                    }
+                }
             }
         }
         // DefaultDataSource gère http(s) ET les fichiers locaux (content://) pour le hors-ligne.
@@ -142,16 +165,7 @@ class MusicService : MediaLibraryService() {
                 reqMs = android.os.SystemClock.elapsedRealtime()
                 Logs.d("play", "lecture : ${mediaItem.mediaMetadata.title}")
                 runCatching { Recents.add(this@MusicService, videoFromMediaItem(mediaItem)) }
-                // Préchargement du titre suivant (remplit le cache) → démarrage instantané.
-                val next = player.currentMediaItemIndex + 1
-                if (next < player.mediaItemCount) {
-                    val uri = player.getMediaItemAt(next).localConfiguration?.uri
-                    if (uri != null && uri.scheme == SCHEME) {
-                        val real = uri.schemeSpecificPart
-                        Logs.d("play", "préchargement du suivant : $real")
-                        scope.launch { runCatching { Engine.audioStreamUrl(this@MusicService, real) } }
-                    }
-                }
+                prefetchNext(player)
             }
 
             // Latence de démarrage : temps entre le titre demandé et « prêt ».
@@ -168,6 +182,25 @@ class MusicService : MediaLibraryService() {
         }.getOrNull()
         session = MediaLibrarySession.Builder(this, player, LibraryCallback()).build()
         watchdog.post(watchdogRun)
+    }
+
+    /**
+     * Extrait en avance le son du titre suivant vers le disque, pour un enchaînement
+     * instantané. UN SEUL préchargement à la fois : si l'extraction précédente n'est
+     * pas finie, on n'en empile pas d'autre (évite l'embouteillage derrière le verrou).
+     */
+    private fun prefetchNext(player: Player) {
+        if (prefetchJob?.isActive == true) return
+        val next = player.currentMediaItemIndex + 1
+        if (next >= player.mediaItemCount) return
+        val uri = player.getMediaItemAt(next).localConfiguration?.uri ?: return
+        if (uri.scheme != SCHEME) return
+        val real = uri.schemeSpecificPart
+        if (AudioCache.cached(this, real) != null) return   // déjà extrait
+        Logs.d("play", "préchargement du suivant : $real")
+        prefetchJob = scope.launch {
+            runCatching { AudioCache.ensure(this@MusicService, real) }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
