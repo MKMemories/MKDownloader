@@ -92,9 +92,28 @@ object Engine {
         return if (!id.isNullOrEmpty()) "https://i.ytimg.com/vi/$id/hqdefault.jpg" else null
     }
 
+    // Titres qu'on peut écarter DÈS le listing (sans résolution, donc sans coût) :
+    // vidéos supprimées/privées et titres réservés au premium/abonnement. On les
+    // filtre à la recherche ET à l'import → moins d'échecs « titre non résolu ».
+    private val BLOCKED_AVAILABILITY = setOf(
+        "premium_only", "subscriber_only", "needs_auth", "needs_subscription", "private",
+    )
+    private val BLOCKED_TITLES = setOf(
+        "[private video]", "[deleted video]", "[unavailable video]",
+        "private video", "deleted video", "video unavailable",
+        "[private]", "[deleted]", "[unavailable]",
+    )
+
+    private fun isUnavailable(e: JSONObject): Boolean {
+        e.optStringOrNull("availability")?.lowercase()?.let { if (it in BLOCKED_AVAILABILITY) return true }
+        e.optStringOrNull("title")?.trim()?.lowercase()?.let { if (it in BLOCKED_TITLES) return true }
+        return false
+    }
+
     private fun videoFromEntry(e: JSONObject): VideoItem? {
         val id = e.optString("id")
         if (id.isEmpty()) return null
+        if (isUnavailable(e)) return null
         return VideoItem(
             url = e.optStringOrNull("url") ?: "https://www.youtube.com/watch?v=$id",
             title = e.optStringOrNull("title") ?: "Vidéo",
@@ -389,8 +408,15 @@ object Engine {
                 addOption("--playlist-end", limit); addOption("--no-warnings")
             }
             val title = root.optStringOrNull("title")
-            val items = entries(root).mapNotNull(::videoFromEntry)
-            Logs.d("import", "playlist '$title' : ${items.size} morceaux (ex. ${items.firstOrNull()?.url})")
+            val all = entries(root)
+            val items = all.mapNotNull(::videoFromEntry)
+            val skipped = all.count { isUnavailable(it) }
+            Logs.d(
+                "import",
+                "playlist '$title' : ${items.size} morceaux" +
+                    (if (skipped > 0) " ($skipped premium/indispo filtrés)" else "") +
+                    " (ex. ${items.firstOrNull()?.url})",
+            )
             title to items
         }
 

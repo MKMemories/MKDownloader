@@ -449,16 +449,21 @@ class MusicService : MediaLibraryService() {
         CarMusic.ARTIST_CATS.flatMap { browseCache[it.id].orEmpty() }
             .distinctBy { it.url }.shuffled()
 
-    /** Cartes de l'accueil voiture : catégories curées puis nœuds système. */
+    /** Cartes de l'accueil voiture : PLAYLISTS d'abord (écran d'accueil), puis
+     *  catégories curées et nœuds système. */
     private fun rootCards(ctx: android.content.Context): List<MediaItem> {
-        val cards = CarMusic.CATS.map { cat ->
+        val cards = mutableListOf<MediaItem>()
+        // Playlists de l'utilisateur en tête → premier onglet, visibles au démarrage.
+        val plArt = Favorites.playlistNames(ctx)
+            .firstNotNullOfOrNull { randomArt(Favorites.tracksOf(ctx, it)) }
+        cards += browsableCard(NODE_PLAYLISTS, ctx.getString(R.string.my_playlists), plArt)
+        CarMusic.CATS.forEach { cat ->
             val pool = if (cat.id == CarMusic.MIX) mixTracks() else browseCache[cat.id].orEmpty()
-            browsableCard(cat.id, cat.label, randomArt(pool))
-        }.toMutableList()
+            cards += browsableCard(cat.id, cat.label, randomArt(pool))
+        }
         cards += browsableCard(NODE_RADIOS, ctx.getString(R.string.music_radios), null)
         cards += browsableCard(NODE_RECENT, ctx.getString(R.string.home_resume), randomArt(Recents.list(ctx)))
         cards += browsableCard(NODE_DOWNLOADS, ctx.getString(R.string.tab_library), null)
-        cards += browsableCard(NODE_PLAYLISTS, ctx.getString(R.string.my_playlists), null)
         cards += browsableCard(NODE_FAVORITES, ctx.getString(R.string.fav_videos), randomArt(Favorites.videos(ctx)))
         return cards
     }
@@ -526,17 +531,18 @@ class MusicService : MediaLibraryService() {
     private fun listParams(): LibraryParams =
         LibraryParams.Builder().setExtras(contentStyleExtras()).build()
 
-    /** Accueil : GRILLE de cartes (pochettes) au lieu d'un menu texte. */
+    /** Accueil : GRILLE de cartes (pochettes) au lieu d'un menu texte.
+     *  Style « category grid » (4) → cartes un peu plus petites que la grille (2). */
     private fun gridParams(): LibraryParams =
         LibraryParams.Builder().setExtras(Bundle().apply {
             putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true)
-            putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 2) // GRILLE (cartes)
+            putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 4) // GRILLE compacte
             putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)  // liste
         }).build()
 
     private fun contentStyleExtras() = Bundle().apply {
         putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true)
-        putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 2) // GRILLE
+        putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 4) // GRILLE compacte
         putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)  // liste
     }
 
