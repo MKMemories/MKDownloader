@@ -15,6 +15,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -58,6 +59,8 @@ class MusicService : MediaLibraryService() {
     // garde-fou, chaque saut empilait une extraction derrière le verrou → file
     // d'attente qui explosait (jusqu'à ~60 s) et cascade de « non résolu ».
     private var prefetchJob: kotlinx.coroutines.Job? = null
+    // Fabrique de source avec cache disque (sert aussi au préchargement disque).
+    private var cacheDataSourceFactory: CacheDataSource.Factory? = null
 
     // Anti-blocage : un titre premium/indisponible reste parfois « en tampon »
     // à 0:00 sans erreur. Au bout de ~15 s on saute au suivant.
@@ -89,48 +92,48 @@ class MusicService : MediaLibraryService() {
             .setBufferDurationsMs(30_000, 120_000, 2_500, 5_000)
             .build()
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Linux; Android 14)")
+            .setUserAgent(
+                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
+                    "Chrome/120.0.0.0 Mobile Safari/537.36",
+            )
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(30_000)
 
-        // Résout « ytdlp:<lien> » → FICHIER AUDIO LOCAL, à la volée (thread de lecture).
-        // On extrait le son de la vidéo musicale vers un fichier sur le disque, puis
-        // on lit CE fichier. Avantages : plus de 403 (URL YouTube bridée/expirée),
-        // démarrage instantané à la ré-écoute, et découplage du flux fragile.
+        // Résout « ytdlp:<lien> » → URL de flux audio réel, à la volée (thread de lecture).
+        // La mise en cache disque est ensuite AUTOMATIQUE (CacheDataSource ci-dessous) :
+        // les octets sont écrits sur le disque pendant la lecture. À la ré-écoute, le
+        // cache sert directement le fichier → pas de résolution, pas de réseau, pas de 403.
         val resolver = ResolvingDataSource.Resolver { dataSpec ->
             if (dataSpec.uri.scheme != SCHEME) {
                 dataSpec
             } else {
                 val real = dataSpec.uri.schemeSpecificPart
-                // 1) Déjà extrait sur le disque → lecture locale instantanée.
-                // 2) Sinon on extrait le son vers un fichier local puis on lit ce fichier.
-                val cached = AudioCache.cached(this@MusicService, real)
-                if (cached != null) Logs.d("play", "lecture locale (cache) : $real")
-                val local = cached ?: runCatching {
-                    runBlocking { AudioCache.ensure(this@MusicService, real) }
+                val stream = runCatching {
+                    runBlocking { Engine.audioStreamUrl(this@MusicService, real) }
                 }.getOrNull()
-                if (local != null) {
-                    dataSpec.withUri(Uri.fromFile(local))
+                if (stream != null) {
+                    dataSpec.withUri(Uri.parse(stream))
                 } else {
-                    // Repli : lecture directe du flux si l'extraction a échoué.
-                    val stream = runCatching {
-                        runBlocking { Engine.audioStreamUrl(this@MusicService, real) }
-                    }.getOrNull()
-                    if (stream != null) {
-                        dataSpec.withUri(Uri.parse(stream))
-                    } else {
-                        // Échec total : on lève une erreur claire → le lecteur passe
-                        // au titre suivant (voir onPlayerError) au lieu de bloquer.
-                        Logs.w("play", "titre non résolu → suivant : $real")
-                        throw java.io.IOException("Titre indisponible : $real")
-                    }
+                    // Échec de résolution : on lève une erreur claire → le lecteur passe
+                    // au titre suivant (voir onPlayerError) au lieu de bloquer.
+                    Logs.w("play", "titre non résolu → suivant : $real")
+                    throw java.io.IOException("Titre indisponible : $real")
                 }
             }
         }
         // DefaultDataSource gère http(s) ET les fichiers locaux (content://) pour le hors-ligne.
         val baseFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpFactory)
-        val dataSourceFactory = ResolvingDataSource.Factory(baseFactory, resolver)
+        val resolvingFactory = ResolvingDataSource.Factory(baseFactory, resolver)
+        // Cache disque transparent : la clé est l'URI « ytdlp:<lien> » (STABLE, ne change
+        // pas d'une résolution à l'autre) → un titre déjà écouté est resservi du disque
+        // sans repasser par yt-dlp ni par le réseau.
+        val cacheFactory = CacheDataSource.Factory()
+            .setCache(MediaCache.get(this))
+            .setUpstreamDataSourceFactory(resolvingFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        cacheDataSourceFactory = cacheFactory
+        val dataSourceFactory = cacheFactory
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
@@ -185,21 +188,31 @@ class MusicService : MediaLibraryService() {
     }
 
     /**
-     * Extrait en avance le son du titre suivant vers le disque, pour un enchaînement
-     * instantané. UN SEUL préchargement à la fois : si l'extraction précédente n'est
-     * pas finie, on n'en empile pas d'autre (évite l'embouteillage derrière le verrou).
+     * Extrait en avance le son du titre suivant vers le cache disque, pour un
+     * enchaînement instantané. UN SEUL préchargement à la fois : si le précédent
+     * n'est pas fini, on n'en empile pas d'autre (évite l'embouteillage derrière le
+     * verrou de résolution qui faisait exploser la file d'attente).
      */
     private fun prefetchNext(player: Player) {
         if (prefetchJob?.isActive == true) return
+        val factory = cacheDataSourceFactory ?: return
         val next = player.currentMediaItemIndex + 1
         if (next >= player.mediaItemCount) return
         val uri = player.getMediaItemAt(next).localConfiguration?.uri ?: return
         if (uri.scheme != SCHEME) return
         val real = uri.schemeSpecificPart
-        if (AudioCache.cached(this, real) != null) return   // déjà extrait
         Logs.d("play", "préchargement du suivant : $real")
-        prefetchJob = scope.launch {
-            runCatching { AudioCache.ensure(this@MusicService, real) }
+        prefetchJob = scope.launch(Dispatchers.IO) {
+            runCatching {
+                val writer = androidx.media3.datasource.cache.CacheWriter(
+                    factory.createDataSource(),
+                    androidx.media3.datasource.DataSpec(uri),
+                    null,
+                    null,
+                )
+                writer.cache()
+                Logs.d("cache", "préchargé sur le disque : $real")
+            }.onFailure { Logs.w("cache", "préchargement échoué : $real") }
         }
     }
 
