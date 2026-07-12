@@ -122,6 +122,7 @@ class MusicService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
         // Un titre indisponible (premium/bloqué) ne fige pas la lecture : on saute.
+        var reqMs = 0L
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 Logs.e("play", "erreur lecture (${error.errorCodeName})", error)
@@ -138,8 +139,17 @@ class MusicService : MediaLibraryService() {
             // Mémorise chaque écoute pour « Reprendre / Récents ».
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 mediaItem ?: return
+                reqMs = android.os.SystemClock.elapsedRealtime()
                 Logs.d("play", "lecture : ${mediaItem.mediaMetadata.title} (${mediaItem.requestMetadata.mediaUri})")
                 runCatching { Recents.add(this@MusicService, videoFromMediaItem(mediaItem)) }
+            }
+
+            // Latence de démarrage : temps entre le titre demandé et « prêt ».
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY && reqMs > 0L) {
+                    Logs.d("perf", "musique prête en ${android.os.SystemClock.elapsedRealtime() - reqMs}ms")
+                    reqMs = 0L
+                }
             }
         })
         equalizer = runCatching {

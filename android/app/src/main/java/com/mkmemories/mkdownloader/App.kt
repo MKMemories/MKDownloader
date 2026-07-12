@@ -399,8 +399,11 @@ object Engine {
                 applyCreds(context, url)
                 addOption("-g")
             }
-            YoutubeDL.getInstance().execute(request, null, null).out
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            val res = YoutubeDL.getInstance().execute(request, null, null).out
                 .lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
+            Logs.d("perf", "résolution flux direct ${android.os.SystemClock.elapsedRealtime() - t0}ms — $url")
+            res
         }
 
     /**
@@ -421,8 +424,11 @@ object Engine {
                 applyCreds(context, url)
                 addOption("-g")
             }
-            YoutubeDL.getInstance().execute(request, null, null).out
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            val res = YoutubeDL.getInstance().execute(request, null, null).out
                 .lineSequence().map { it.trim() }.filter { it.startsWith("http") }.toList()
+            Logs.d("perf", "résolution vidéo ${android.os.SystemClock.elapsedRealtime() - t0}ms (${res.size} flux, ${maxHeight}p) — $url")
+            res
         }
 
     /**
@@ -442,13 +448,17 @@ object Engine {
                 addOption("--extractor-args", YT_ARGS)
                 addOption("-g")
             }
+            val t0 = android.os.SystemClock.elapsedRealtime()
             try {
                 val out = YoutubeDL.getInstance().execute(request, null, null).out
+                val dt = android.os.SystemClock.elapsedRealtime() - t0
                 val stream = out.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
-                if (stream != null) Logs.d("resolve", "OK $url") else Logs.w("resolve", "aucune URL http pour $url — sortie: ${out.take(300)}")
+                if (stream != null) Logs.d("perf", "résolution audio ${dt}ms — $url")
+                else Logs.w("resolve", "aucune URL http (${dt}ms) pour $url — sortie: ${out.take(300)}")
                 stream
             } catch (e: Exception) {
-                Logs.e("resolve", "échec $url", e)
+                val dt = android.os.SystemClock.elapsedRealtime() - t0
+                Logs.e("resolve", "échec audio (${dt}ms) $url", e)
                 null
             }
         }

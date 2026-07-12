@@ -70,6 +70,7 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
     private var speed = 1f
     private var detailUploader: String? = null
     private var descExpanded = false
+    private var playReqMs = 0L
 
     private val qualityOptions = listOf(
         2160 to "4K (max)", 1080 to "1080p", 720 to "720p", 480 to "480p", 360 to "360p"
@@ -244,6 +245,8 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
 
     private fun resolveAndPlay() {
         ui.playerLoading.isVisible = true
+        playReqMs = android.os.SystemClock.elapsedRealtime()
+        Logs.d("play", "ouverture vidéo : $videoTitle ${if (live) "(live)" else if (direct) "(direct)" else ""}")
         lifecycleScope.launch {
             sources = try {
                 when {
@@ -314,10 +317,20 @@ class PlayerActivity : AppCompatActivity(), SessionAvailabilityListener {
                 player.playWhenReady = true
                 player.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
-                        if (state == Player.STATE_READY && durationSec == 0) {
-                            val d = player.duration
-                            if (d > 0 && !live) setupClip((d / 1000).toInt())
+                        if (state == Player.STATE_READY) {
+                            if (playReqMs > 0L) {
+                                Logs.d("perf", "vidéo prête en ${android.os.SystemClock.elapsedRealtime() - playReqMs}ms — $videoTitle")
+                                playReqMs = 0L
+                            }
+                            if (durationSec == 0) {
+                                val d = player.duration
+                                if (d > 0 && !live) setupClip((d / 1000).toInt())
+                            }
                         }
+                    }
+
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Logs.e("play", "erreur lecture vidéo (${error.errorCodeName}) — $videoTitle", error)
                     }
                 })
             }
