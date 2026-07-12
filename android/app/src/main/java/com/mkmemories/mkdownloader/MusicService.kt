@@ -168,11 +168,19 @@ class MusicService : MediaLibraryService() {
                 reqMs = android.os.SystemClock.elapsedRealtime()
                 Logs.d("play", "lecture : ${mediaItem.mediaMetadata.title}")
                 runCatching { Recents.add(this@MusicService, videoFromMediaItem(mediaItem)) }
-                prefetchNext(player)
+                // NB : le préchargement n'est PAS lancé ici. Il démarrait au même
+                // instant que la résolution du titre courant et lui volait le verrou
+                // → le titre écouté restait « non résolu ~10 s » puis sautait. On
+                // attend que le titre courant soit PRÊT (voir onPlaybackStateChanged).
             }
 
             // Latence de démarrage : temps entre le titre demandé et « prêt ».
             override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) {
+                    // Le titre courant joue : on peut précharger le suivant sans lui
+                    // disputer le verrou de résolution.
+                    prefetchNext(player)
+                }
                 if (state == Player.STATE_READY && reqMs > 0L) {
                     Logs.d("perf", "musique prête en ${android.os.SystemClock.elapsedRealtime() - reqMs}ms")
                     reqMs = 0L
