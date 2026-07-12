@@ -70,6 +70,26 @@ object Favorites {
         val map = playlists(c); map.remove(name); savePlaylists(c, map)
     }
 
+    /** Renomme une playlist en conservant l'ordre. Renvoie false si le nom est pris/vide. */
+    fun renamePlaylist(c: Context, oldName: String, newName: String): Boolean {
+        val n = newName.trim()
+        if (n.isEmpty()) return false
+        val map = playlists(c)
+        if (!map.containsKey(oldName) || (map.containsKey(n) && n != oldName)) return false
+        val reordered = LinkedHashMap<String, MutableList<VideoItem>>()
+        map.forEach { (k, v) -> reordered[if (k == oldName) n else k] = v }
+        savePlaylists(c, reordered)
+        return true
+    }
+
+    /** Remplace les morceaux d'une playlist (ex. après un test de lecture qui élague). */
+    fun setPlaylistTracks(c: Context, name: String, items: List<VideoItem>) {
+        val map = playlists(c)
+        if (!map.containsKey(name)) return
+        map[name] = items.toMutableList()
+        savePlaylists(c, map)
+    }
+
     fun addToPlaylist(c: Context, name: String, item: VideoItem) {
         val map = playlists(c)
         val list = map.getOrPut(name) { mutableListOf() }

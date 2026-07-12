@@ -188,6 +188,19 @@
     <string name="dl_notif_channel">Téléchargements</string>
     <string name="update_engine">Mettre à jour yt-dlp</string>
     <string name="update_app">Mettre à jour l\'app</string>
+    <string name="logs_export">🐞 Journal</string>
+    <string name="logs_empty">Journal vide pour l\'instant.</string>
+    <string name="playlist_new_inline">➕ Nouvelle playlist…</string>
+    <string name="playlist_rename">✏ Renommer</string>
+    <string name="playlist_rename_failed">Nom déjà utilisé ou invalide.</string>
+    <string name="playlist_test">🩺 Tester la lecture</string>
+    <string name="playlist_testing">Test de lecture…</string>
+    <string name="playlist_testing_n">Test %1$d/%2$d — %3$d illisible(s)</string>
+    <string name="playlist_test_ok">Tous les %1$d titres se lisent ✔</string>
+    <string name="playlist_test_result">%1$d titre(s) illisible(s)</string>
+    <string name="playlist_test_prune">Garder %1$d titres lisibles et retirer %2$d ?</string>
+    <string name="playlist_test_apply">Retirer</string>
+    <string name="playlist_test_done">%1$d titre(s) retiré(s).</string>
     <string name="updating">Mise à jour de yt-dlp…</string>
 
     <!-- Musique -->

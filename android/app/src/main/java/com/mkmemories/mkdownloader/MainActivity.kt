@@ -1060,6 +1060,7 @@ class MainActivity : AppCompatActivity() {
         ui.channelCurrent.setOnClickListener { currentItem?.let { openChannelFromVideo(it) } }
         ui.updateButton.setOnClickListener { updateEngine() }
         ui.appUpdateButton.setOnClickListener { toast(getString(R.string.upd_checking)); checkAppUpdate(force = true) }
+        ui.logsButton.setOnClickListener { runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) } }
         ui.channelBannerClose.setOnClickListener {
             ui.channelBanner.isVisible = false
             results.submit(emptyList()); ui.results.isVisible = false
@@ -1390,28 +1391,38 @@ class MainActivity : AppCompatActivity() {
 
     private fun choosePlaylist(item: VideoItem) {
         val names = Favorites.playlistNames(this)
-        if (names.isEmpty()) {
-            // Aucune playlist : on en crée une puis on ajoute.
-            val input = AppCompatEditText(this).apply { hint = getString(R.string.playlist_name) }
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.new_playlist)
-                .setView(input)
-                .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.create) { _, _ ->
-                    val name = input.text?.toString()?.trim().orEmpty()
-                    if (name.isNotEmpty()) {
-                        Favorites.addToPlaylist(this, name, item)
-                        toast(getString(R.string.added_to, name)); refreshPlaylists()
-                    }
-                }
-                .show()
-            return
-        }
+        // Toujours proposer la création à la volée en tête de liste.
+        val entries = (listOf(getString(R.string.playlist_new_inline)) + names).toTypedArray()
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.add_to_playlist)
-            .setItems(names.toTypedArray()) { _, i ->
-                Favorites.addToPlaylist(this, names[i], item)
-                toast(getString(R.string.added_to, names[i])); refreshPlaylists()
+            .setItems(entries) { _, i ->
+                if (i == 0) promptNewPlaylistWith(item)
+                else {
+                    val name = names[i - 1]
+                    Favorites.addToPlaylist(this, name, item)
+                    toast(getString(R.string.added_to, name)); refreshPlaylists()
+                }
+            }
+            .show()
+    }
+
+    /** Crée une playlist à partir d'un titre (nom saisi), puis y ajoute le titre. */
+    private fun promptNewPlaylistWith(item: VideoItem) {
+        val input = AppCompatEditText(this).apply {
+            hint = getString(R.string.playlist_name); setSingleLine(true)
+            setText(item.title.take(40))
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.new_playlist)
+            .setView(android.widget.FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) })
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.create) { _, _ ->
+                val name = input.text?.toString()?.trim().orEmpty()
+                if (name.isNotEmpty()) {
+                    Favorites.addToPlaylist(this, name, item)
+                    toast(getString(R.string.added_to, name)); refreshPlaylists()
+                }
             }
             .show()
     }
@@ -1421,6 +1432,8 @@ class MainActivity : AppCompatActivity() {
         if (tracks.isEmpty()) { toast(getString(R.string.playlist_empty)); return }
         val options = arrayOf(
             getString(R.string.listen_all),
+            getString(R.string.playlist_test),
+            getString(R.string.playlist_rename),
             getString(R.string.download_all_mp3),
             getString(R.string.delete_playlist),
         )
@@ -1429,11 +1442,67 @@ class MainActivity : AppCompatActivity() {
             .setItems(options) { _, i ->
                 when (i) {
                     0 -> openMusic(tracks, 0, name)
-                    1 -> { Downloads.startBatch(this, tracks, AUDIO_QUALITY); toast(getString(R.string.dl_batch_queued, tracks.size)) }
-                    2 -> confirmDeletePlaylist(name)
+                    1 -> testPlaylist(name)
+                    2 -> promptRenamePlaylist(name)
+                    3 -> { Downloads.startBatch(this, tracks, AUDIO_QUALITY); toast(getString(R.string.dl_batch_queued, tracks.size)) }
+                    4 -> confirmDeletePlaylist(name)
                 }
             }
             .show()
+    }
+
+    private fun promptRenamePlaylist(name: String) {
+        val input = AppCompatEditText(this).apply {
+            hint = getString(R.string.playlist_name); setSingleLine(true); setText(name)
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.playlist_rename)
+            .setView(android.widget.FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) })
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val newName = input.text?.toString()?.trim().orEmpty()
+                if (Favorites.renamePlaylist(this, name, newName)) { refreshPlaylists(); toast(getString(R.string.added_to, newName)) }
+                else toast(getString(R.string.playlist_rename_failed))
+            }
+            .show()
+    }
+
+    /**
+     * Teste la lecture de chaque titre (résolution rapide via yt-dlp) et retire
+     * ceux qui ne se lisent pas dans l'app, pour garder une playlist « propre ».
+     */
+    private fun testPlaylist(name: String) {
+        val tracks = Favorites.tracksOf(this, name)
+        if (tracks.isEmpty()) { toast(getString(R.string.playlist_empty)); return }
+        Logs.d("test", "test playlist '$name' : ${tracks.size} titres")
+        val progress = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.playlist_testing)
+            .setMessage(getString(R.string.playlist_testing_n, 0, tracks.size, 0))
+            .setCancelable(false)
+            .show()
+        lifecycleScope.launch {
+            val ok = ArrayList<VideoItem>()
+            var ko = 0
+            for ((idx, t) in tracks.withIndex()) {
+                progress.setMessage(getString(R.string.playlist_testing_n, idx + 1, tracks.size, ko))
+                val stream = if (Playback.isDirect(t.url)) t.url
+                             else runCatching { Engine.audioStreamUrl(this@MainActivity, t.url) }.getOrNull()
+                if (stream != null) ok.add(t) else { ko++; Logs.w("test", "retiré (illisible) : ${t.title} — ${t.url}") }
+            }
+            progress.dismiss()
+            if (ko == 0) { toast(getString(R.string.playlist_test_ok, tracks.size)); return@launch }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(getString(R.string.playlist_test_result, ko))
+                .setMessage(getString(R.string.playlist_test_prune, ok.size, ko))
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.playlist_test_apply) { _, _ ->
+                    Favorites.setPlaylistTracks(this@MainActivity, name, ok)
+                    refreshPlaylists()
+                    toast(getString(R.string.playlist_test_done, ko))
+                }
+                .show()
+        }
     }
 
     private fun playPlaylist(name: String) {

@@ -93,7 +93,14 @@ class MusicService : MediaLibraryService() {
                 val stream = runCatching {
                     runBlocking { Engine.audioStreamUrl(this@MusicService, real) }
                 }.getOrNull()
-                if (stream != null) dataSpec.withUri(Uri.parse(stream)) else dataSpec
+                if (stream != null) {
+                    dataSpec.withUri(Uri.parse(stream))
+                } else {
+                    // Échec de résolution : on lève une erreur claire → le lecteur
+                    // passe au titre suivant (voir onPlayerError) au lieu de bloquer.
+                    Logs.w("play", "titre non résolu → suivant : $real")
+                    throw java.io.IOException("Titre indisponible : $real")
+                }
             } else {
                 dataSpec
             }
@@ -117,16 +124,21 @@ class MusicService : MediaLibraryService() {
         // Un titre indisponible (premium/bloqué) ne fige pas la lecture : on saute.
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
+                Logs.e("play", "erreur lecture (${error.errorCodeName})", error)
                 if (player.hasNextMediaItem()) {
+                    Logs.d("play", "→ passage au titre suivant")
                     player.seekToNextMediaItem()
                     player.prepare()
                     player.play()
+                } else {
+                    Logs.w("play", "aucun titre suivant — lecture arrêtée")
                 }
             }
 
             // Mémorise chaque écoute pour « Reprendre / Récents ».
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 mediaItem ?: return
+                Logs.d("play", "lecture : ${mediaItem.mediaMetadata.title} (${mediaItem.requestMetadata.mediaUri})")
                 runCatching { Recents.add(this@MusicService, videoFromMediaItem(mediaItem)) }
             }
         })

@@ -379,7 +379,9 @@ object Engine {
                 addOption("--playlist-end", limit); addOption("--no-warnings")
             }
             val title = root.optStringOrNull("title")
-            title to entries(root).mapNotNull(::videoFromEntry)
+            val items = entries(root).mapNotNull(::videoFromEntry)
+            Logs.d("import", "playlist '$title' : ${items.size} morceaux (ex. ${items.firstOrNull()?.url})")
+            title to items
         }
 
     /**
@@ -440,7 +442,14 @@ object Engine {
                 addOption("--extractor-args", YT_ARGS)
                 addOption("-g")
             }
-            YoutubeDL.getInstance().execute(request, null, null).out
-                .lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
+            try {
+                val out = YoutubeDL.getInstance().execute(request, null, null).out
+                val stream = out.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
+                if (stream != null) Logs.d("resolve", "OK $url") else Logs.w("resolve", "aucune URL http pour $url — sortie: ${out.take(300)}")
+                stream
+            } catch (e: Exception) {
+                Logs.e("resolve", "échec $url", e)
+                null
+            }
         }
 }

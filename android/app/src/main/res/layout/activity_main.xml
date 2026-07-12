@@ -464,6 +464,16 @@
                     android:paddingHorizontal="10dp"
                     android:text="@string/update_app"
                     android:textColor="@color/accent2" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/logsButton"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:text="@string/logs_export"
+                    android:textColor="@color/text_dim" />
             </LinearLayout>
 
             <TextView
