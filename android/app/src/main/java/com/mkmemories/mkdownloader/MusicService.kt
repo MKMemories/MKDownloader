@@ -140,8 +140,18 @@ class MusicService : MediaLibraryService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 mediaItem ?: return
                 reqMs = android.os.SystemClock.elapsedRealtime()
-                Logs.d("play", "lecture : ${mediaItem.mediaMetadata.title} (${mediaItem.requestMetadata.mediaUri})")
+                Logs.d("play", "lecture : ${mediaItem.mediaMetadata.title}")
                 runCatching { Recents.add(this@MusicService, videoFromMediaItem(mediaItem)) }
+                // Préchargement du titre suivant (remplit le cache) → démarrage instantané.
+                val next = player.currentMediaItemIndex + 1
+                if (next < player.mediaItemCount) {
+                    val uri = player.getMediaItemAt(next).localConfiguration?.uri
+                    if (uri != null && uri.scheme == SCHEME) {
+                        val real = uri.schemeSpecificPart
+                        Logs.d("play", "préchargement du suivant : $real")
+                        scope.launch { runCatching { Engine.audioStreamUrl(this@MusicService, real) } }
+                    }
+                }
             }
 
             // Latence de démarrage : temps entre le titre demandé et « prêt ».

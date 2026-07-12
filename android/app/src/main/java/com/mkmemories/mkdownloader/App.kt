@@ -36,6 +36,16 @@ object Engine {
     @Volatile private var ready = false
     private val mutex = Mutex()
 
+    // Résolution yt-dlp SÉRIALISÉE : une seule extraction à la fois. Évite
+    // l'empilement de processus (qui faisait grimper la latence à 30 s) et les
+    // échecs par concurrence (le même titre résolu + « non résolu » en même temps).
+    private val resolveMutex = Mutex()
+
+    // Cache des URLs de flux audio résolues (les liens YouTube expirent ~6 h) :
+    // rejouer / précharger devient instantané.
+    private val audioCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Long>>()
+    private const val CACHE_TTL_MS = 5 * 3600_000L
+
     // Clients d'extraction YouTube. Le client « android » est désormais bloqué
     // par YouTube (« Sign in to confirm you're not a bot »). On tente plusieurs
     // clients robustes ; yt-dlp bascule sur le premier qui répond.
@@ -437,29 +447,43 @@ object Engine {
      * l'opus/webm de « bestaudio » (qui causait les coupures au bout de
      * quelques secondes). Repli sur un flux progressif muxé si besoin.
      */
+    private fun cachedAudio(url: String): String? =
+        audioCache[url]?.let { (stream, exp) -> if (android.os.SystemClock.elapsedRealtime() < exp) stream else null }
+
     suspend fun audioStreamUrl(context: Context, url: String): String? =
         withContext(Dispatchers.IO) {
+            cachedAudio(url)?.let { return@withContext it }
             ensureReady(context)
-            val request = YoutubeDLRequest(url).apply {
-                addOption("--no-playlist"); addOption("--no-warnings")
-                addOption("-f", "ba[ext=m4a]/ba[acodec^=mp4a]/b[ext=mp4]/ba/b")
-                // Client "android" : URLs directement lisibles, NON limitées
-                // (évite le débit en à-coups / coupures toutes les ~10 s).
-                addOption("--extractor-args", YT_ARGS)
-                addOption("-g")
-            }
-            val t0 = android.os.SystemClock.elapsedRealtime()
-            try {
-                val out = YoutubeDL.getInstance().execute(request, null, null).out
-                val dt = android.os.SystemClock.elapsedRealtime() - t0
-                val stream = out.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
-                if (stream != null) Logs.d("perf", "résolution audio ${dt}ms — $url")
-                else Logs.w("resolve", "aucune URL http (${dt}ms) pour $url — sortie: ${out.take(300)}")
-                stream
-            } catch (e: Exception) {
-                val dt = android.os.SystemClock.elapsedRealtime() - t0
-                Logs.e("resolve", "échec audio (${dt}ms) $url", e)
-                null
+            val queued = android.os.SystemClock.elapsedRealtime()
+            resolveMutex.withLock {
+                // Un autre appel (préchargement) a pu résoudre pendant l'attente.
+                cachedAudio(url)?.let {
+                    Logs.d("perf", "audio depuis cache — $url")
+                    return@withLock it
+                }
+                val wait = android.os.SystemClock.elapsedRealtime() - queued
+                val request = YoutubeDLRequest(url).apply {
+                    addOption("--no-playlist"); addOption("--no-warnings")
+                    addOption("-f", "ba[ext=m4a]/ba[acodec^=mp4a]/b[ext=mp4]/ba/b")
+                    addOption("--extractor-args", YT_ARGS)
+                    addOption("-g")
+                }
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                try {
+                    val out = YoutubeDL.getInstance().execute(request, null, null).out
+                    val dt = android.os.SystemClock.elapsedRealtime() - t0
+                    val stream = out.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http") }
+                    if (stream != null) {
+                        audioCache[url] = stream to (android.os.SystemClock.elapsedRealtime() + CACHE_TTL_MS)
+                        Logs.d("perf", "résolution audio ${dt}ms (file ${wait}ms) — $url")
+                    } else {
+                        Logs.w("resolve", "aucune URL http (${dt}ms) pour $url — sortie: ${out.take(300)}")
+                    }
+                    stream
+                } catch (e: Exception) {
+                    Logs.e("resolve", "échec audio (${android.os.SystemClock.elapsedRealtime() - t0}ms) $url", e)
+                    null
+                }
             }
         }
 }
