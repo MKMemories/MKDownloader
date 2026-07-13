@@ -873,6 +873,7 @@ class MainActivity : AppCompatActivity() {
         val platforms = listOf(
             Triple("youtube", getString(R.string.acc_youtube), true),
             Triple("instagram", getString(R.string.acc_instagram), false),
+            Triple("tiktok", getString(R.string.acc_tiktok), false),
         )
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.acc_title)
@@ -1352,13 +1353,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 results.submit(items)
                 ui.results.isVisible = items.isNotEmpty()
-                if (items.isEmpty()) toast(getString(R.string.no_results))
+                if (items.isEmpty()) toast(getString(emptyMsgFor(searchSource)))
             } catch (e: Exception) {
                 toast(cleanError(e))
             } finally {
                 setBusy(false)
             }
         }
+    }
+
+    /** Message d'absence de résultat adapté à la source (aide à comprendre pourquoi). */
+    private fun emptyMsgFor(source: String): Int = when (source) {
+        "instagram" -> R.string.src_empty_instagram
+        "tiktok" -> R.string.src_empty_tiktok
+        else -> R.string.no_results
     }
 
     /** Entrelace plusieurs listes (round-robin) en dédupliquant par URL. */
