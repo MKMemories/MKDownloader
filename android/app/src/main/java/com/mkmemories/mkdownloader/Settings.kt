@@ -11,7 +11,12 @@ import java.io.File
  */
 object Settings {
     private const val PREFS = "mkdl_settings"
-    private const val COOKIES = "youtube_cookies.txt"
+
+    // Cookies par plateforme (session connectée) → fichiers cookies.txt Netscape,
+    // transmis à yt-dlp via --cookies. YouTube : conserve l'ancien nom de fichier
+    // pour ne pas perdre une connexion déjà en place.
+    private fun cookieFile(platform: String) =
+        if (platform == "youtube") "youtube_cookies.txt" else "${platform}_cookies.txt"
 
     data class Creds(val user: String, val pass: String)
 
@@ -37,21 +42,31 @@ object Settings {
         }
     }
 
-    fun isYoutube(url: String): Boolean {
+    /** Plateforme (pour les cookies) correspondant à une URL, ou null. */
+    fun platformForCookies(url: String): String? {
         val u = url.lowercase()
-        return "youtube.com" in u || "youtu.be" in u
+        return when {
+            "youtube.com" in u || "youtu.be" in u -> "youtube"
+            "instagram.com" in u || "instagr.am" in u -> "instagram"
+            "tiktok.com" in u -> "tiktok"
+            else -> null
+        }
     }
 
-    /** Fichier cookies YouTube (session connectée), ou null si absent/vide. */
-    fun youtubeCookies(c: Context): File? =
-        File(c.filesDir, COOKIES).takeIf { it.exists() && it.length() > 0 }
+    /** Fichier cookies d'une plateforme (session connectée), ou null si absent/vide. */
+    fun cookiesFile(c: Context, platform: String): File? =
+        File(c.filesDir, cookieFile(platform)).takeIf { it.exists() && it.length() > 0 }
 
-    fun clearYoutubeCookies(c: Context) {
-        File(c.filesDir, COOKIES).delete()
+    /** Fichier cookies applicable à une URL (selon sa plateforme), ou null. */
+    fun cookiesForUrl(c: Context, url: String): File? =
+        platformForCookies(url)?.let { cookiesFile(c, it) }
+
+    fun clearCookies(c: Context, platform: String) {
+        File(c.filesDir, cookieFile(platform)).delete()
     }
 
     /** Écrit le contenu d'un cookies.txt (import fichier ou capture WebView). */
-    fun saveYoutubeCookies(c: Context, text: String) {
-        File(c.filesDir, COOKIES).writeText(text)
+    fun saveCookies(c: Context, platform: String, text: String) {
+        File(c.filesDir, cookieFile(platform)).writeText(text)
     }
 }

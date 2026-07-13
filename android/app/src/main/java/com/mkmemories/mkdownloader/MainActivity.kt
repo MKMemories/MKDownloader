@@ -82,7 +82,8 @@ class MainActivity : AppCompatActivity() {
     private var skeletonPulse: ObjectAnimator? = null
     private var wasDownloading = false
 
-    // Import d'un fichier cookies.txt (connexion YouTube fiable, hors WebView).
+    // Import d'un fichier cookies.txt (connexion fiable, hors WebView).
+    private var cookiePlatform = "youtube"
     private val pickCookies = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let { importCookiesFrom(it) } }
@@ -820,16 +821,35 @@ class MainActivity : AppCompatActivity() {
         // Machine d'extraits : renvoyer une liste ID + plages → téléchargements.
         ui.importClips.isVisible = true
         ui.importClips.setOnClickListener { importClips() }
-        // Compte YouTube global (connexion requise par certaines vidéos).
+        // Comptes (YouTube / Instagram) : connexion requise par certains contenus.
         ui.accountButton.isVisible = true
-        ui.accountButton.setOnClickListener { showYoutubeAccountDialog() }
+        ui.accountButton.setOnClickListener { showAccountsMenu() }
+        // Élargit les sources : liens/profils/hashtags TikTok & Instagram acceptés.
+        ui.searchInputLayout.hint = getString(R.string.an_search_hint)
     }
 
-    /** Réglage global : connexion YouTube par cookies (import de fichier ou WebView).
+    /** Choix de la plateforme (YouTube / Instagram) puis actions de connexion. */
+    private fun showAccountsMenu() {
+        // Triple(plateforme, libellé, connexion WebView Google possible ?)
+        val platforms = listOf(
+            Triple("youtube", getString(R.string.acc_youtube), true),
+            Triple("instagram", getString(R.string.acc_instagram), false),
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.acc_title)
+            .setItems(platforms.map { it.second }.toTypedArray()) { _, i ->
+                val (platform, label, web) = platforms[i]
+                showCookiesDialog(platform, label, web)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** Connexion d'une plateforme par cookies (import de fichier, + WebView pour YT).
      *  Vue personnalisée (texte + boutons) : un AlertDialog ne peut PAS afficher à la
-     *  fois un message ET une liste — le message masquait les actions. */
-    private fun showYoutubeAccountDialog() {
-        val connected = Settings.youtubeCookies(this) != null
+     *  fois un message ET une liste — le message masquerait les actions. */
+    private fun showCookiesDialog(platform: String, label: String, allowWebLogin: Boolean) {
+        val connected = Settings.cookiesFile(this, platform) != null
         val d = resources.displayMetrics.density
         val pad = (20 * d).toInt()
         val box = android.widget.LinearLayout(this).apply {
@@ -837,18 +857,19 @@ class MainActivity : AppCompatActivity() {
             setPadding(pad, pad / 2, pad, 0)
         }
         box.addView(android.widget.TextView(this).apply {
-            setText(if (connected) R.string.yt_login_connected else R.string.yt_login_desc)
+            text = if (connected) getString(R.string.acc_connected, label)
+            else getString(R.string.acc_desc, label)
             setPadding(0, 0, 0, (8 * d).toInt())
         })
         val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.yt_login_title)
+            .setTitle(label)
             .setView(box)
             .setNegativeButton(R.string.cancel, null)
             .create()
-        fun add(textRes: Int, action: () -> Unit) {
+        fun add(text: String, action: () -> Unit) {
             box.addView(
                 android.widget.Button(this).apply {
-                    setText(textRes)
+                    this.text = text
                     setOnClickListener { dialog.dismiss(); action() }
                 },
                 android.widget.LinearLayout.LayoutParams(
@@ -858,10 +879,12 @@ class MainActivity : AppCompatActivity() {
             )
         }
         // Méthode fiable en premier : import d'un cookies.txt exporté du navigateur.
-        add(R.string.yt_import_cookies) { pickCookiesFile() }
-        add(R.string.yt_login_signin) { startActivity(Intent(this, YoutubeLoginActivity::class.java)) }
-        if (connected) add(R.string.yt_login_signout) {
-            Settings.clearYoutubeCookies(this)
+        add(getString(R.string.yt_import_cookies)) { cookiePlatform = platform; pickCookiesFile() }
+        if (allowWebLogin) add(getString(R.string.yt_login_signin)) {
+            startActivity(Intent(this, YoutubeLoginActivity::class.java))
+        }
+        if (connected) add(getString(R.string.yt_login_signout)) {
+            Settings.clearCookies(this, platform)
             toast(getString(R.string.yt_login_cleared))
         }
         dialog.show()
@@ -875,12 +898,18 @@ class MainActivity : AppCompatActivity() {
 
     /** Copie le cookies.txt choisi dans le stockage privé après validation. */
     private fun importCookiesFrom(uri: Uri) {
+        val platform = cookiePlatform
+        val marker = when (platform) {
+            "instagram" -> "instagram.com"
+            "tiktok" -> "tiktok.com"
+            else -> "youtube.com"
+        }
         runCatching {
             val text = contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }
-            require(text.contains("youtube.com", ignoreCase = true)) { "sans cookies YouTube" }
-            Settings.saveYoutubeCookies(this, text)
+            require(text.contains(marker, ignoreCase = true)) { "sans cookies $platform" }
+            Settings.saveCookies(this, platform, text)
         }.onSuccess {
-            Logs.d("account", "cookies YouTube importés (fichier)")
+            Logs.d("account", "cookies $platform importés (fichier)")
             toast(getString(R.string.yt_login_ok))
         }.onFailure {
             Logs.w("account", "import cookies échoué : ${it.message}")
@@ -1157,8 +1186,47 @@ class MainActivity : AppCompatActivity() {
         closeSuggest(ui.searchInput)
         val input = ui.searchInput.text?.toString().orEmpty().trim()
         if (input.isEmpty() || busy) return
-        if (input.startsWith("http://") || input.startsWith("https://")) analyzeUrl(input)
-        else searchVideos(input)
+        when {
+            !(input.startsWith("http://") || input.startsWith("https://")) -> searchVideos(input)
+            // Profil / hashtag TikTok ou Instagram → on LISTE le contenu.
+            isListingUrl(input) -> browseUrlResults(input)
+            // Vidéo isolée (toutes plateformes) → analyse.
+            else -> analyzeUrl(input)
+        }
+    }
+
+    /** Vrai pour un lien de PROFIL ou HASHTAG (à lister), faux pour une vidéo isolée. */
+    private fun isListingUrl(url: String): Boolean {
+        val u = url.lowercase()
+        return when {
+            "tiktok.com" in u -> "/video/" !in u && ("/@" in u || "/tag/" in u)
+            "instagram.com" in u || "instagr.am" in u ->
+                "/explore/tags/" in u ||
+                    ("/p/" !in u && "/reel/" !in u && "/reels/" !in u && "/tv/" !in u &&
+                        "/stories/" !in u &&
+                        Regex("instagram\\.com/[a-z0-9._]+/?(\\?|$)").containsMatchIn(u))
+            else -> false
+        }
+    }
+
+    /** Liste le contenu d'un profil / hashtag et l'affiche comme des résultats. */
+    private fun browseUrlResults(url: String) {
+        setBusy(true, R.string.browsing)
+        ui.videoCard.isVisible = false
+        ui.channelBanner.isVisible = false
+        ui.homeScroll.isVisible = false
+        lifecycleScope.launch {
+            try {
+                val items = Engine.browseUrl(this@MainActivity, url)
+                results.submit(items)
+                ui.results.isVisible = items.isNotEmpty()
+                if (items.isEmpty()) toast(getString(R.string.browse_empty))
+            } catch (e: Exception) {
+                toast(cleanError(e))
+            } finally {
+                setBusy(false)
+            }
+        }
     }
 
     private fun setBusy(value: Boolean, statusRes: Int? = null) {

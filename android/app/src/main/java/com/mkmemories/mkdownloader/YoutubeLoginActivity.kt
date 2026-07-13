@@ -13,7 +13,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import java.io.File
 
 /**
  * Connexion YouTube « in-app » : l'utilisateur se connecte à Google dans une
@@ -93,10 +92,9 @@ class YoutubeLoginActivity : AppCompatActivity() {
             ".youtube.com" to cm.getCookie("https://www.youtube.com"),
             ".google.com" to cm.getCookie("https://www.google.com"),
         )
-        val file = File(filesDir, "youtube_cookies.txt")
-        runCatching { file.writeText(buildNetscape(byDomain)) }
+        runCatching { Settings.saveCookies(this, "youtube", buildNetscape(byDomain)) }
             .onSuccess {
-                Logs.d("account", "cookies YouTube enregistrés (${file.length()} o)")
+                Logs.d("account", "cookies YouTube enregistrés")
                 Toast.makeText(this, R.string.yt_login_ok, Toast.LENGTH_SHORT).show()
                 setResult(Activity.RESULT_OK)
                 finish()

@@ -89,7 +89,10 @@ object Engine {
             if (arr.length() > 0) arr.optJSONObject(arr.length() - 1)?.optString("url")?.let { if (it.isNotEmpty()) return it }
         }
         entry.optStringOrNull("thumbnail")?.let { return it }
-        return if (!id.isNullOrEmpty()) "https://i.ytimg.com/vi/$id/hqdefault.jpg" else null
+        // Repli miniature UNIQUEMENT pour un id YouTube (11 car.) — sinon (TikTok,
+        // Instagram…) on n'invente pas une URL ytimg qui serait cassée.
+        return if (!id.isNullOrEmpty() && id.matches(Regex("[A-Za-z0-9_-]{11}")))
+            "https://i.ytimg.com/vi/$id/hqdefault.jpg" else null
     }
 
     // Titres qu'on peut écarter DÈS le listing (sans résolution, donc sans coût) :
@@ -138,10 +141,8 @@ object Engine {
             addOption("--username", it.user)
             addOption("--password", it.pass)
         }
-        // YouTube : cookies d'une session connectée (voir YoutubeLoginActivity).
-        if (Settings.isYoutube(url)) {
-            Settings.youtubeCookies(context)?.let { addOption("--cookies", it.absolutePath) }
-        }
+        // YouTube / Instagram / TikTok : cookies d'une session connectée si dispo.
+        Settings.cookiesForUrl(context, url)?.let { addOption("--cookies", it.absolutePath) }
     }
 
     suspend fun getInfo(context: Context, url: String): VideoItem = withContext(Dispatchers.IO) {
@@ -285,9 +286,7 @@ object Engine {
                     addOption("--sub-langs", "fr.*,en.*")
                     addOption("--sub-format", "vtt")
                     addOption("--extractor-args", YT_ARGS)
-                    if (Settings.isYoutube(url)) {
-                        Settings.youtubeCookies(context)?.let { addOption("--cookies", it.absolutePath) }
-                    }
+                    Settings.cookiesForUrl(context, url)?.let { addOption("--cookies", it.absolutePath) }
                     addOption("--no-warnings")
                     addOption("-o", "${dir.absolutePath}/%(id)s.%(ext)s")
                 }
@@ -425,6 +424,31 @@ object Engine {
                     " (ex. ${items.firstOrNull()?.url})",
             )
             title to items
+        }
+
+    /**
+     * Liste le contenu d'un PROFIL / HASHTAG / chaîne / playlist (TikTok, Instagram,
+     * YouTube…) sans le télécharger : extraction « à plat » rapide. Applique les
+     * cookies de la plateforme (Instagram exige souvent une connexion).
+     */
+    suspend fun browseUrl(context: Context, url: String, limit: Int = 60): List<VideoItem> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val request = YoutubeDLRequest(url).apply {
+                addOption("--dump-single-json")
+                addOption("--flat-playlist")
+                addOption("--playlist-end", limit)
+                addOption("--no-warnings")
+                addOption("--extractor-args", YT_ARGS)
+                applyCreds(context, url)
+            }
+            val out = YoutubeDL.getInstance().execute(request, null, null).out
+            val start = out.indexOf('{')
+            if (start < 0) return@withContext emptyList()
+            val root = JSONObject(out.substring(start))
+            val items = entries(root).mapNotNull(::videoFromEntry)
+            Logs.d("browse", "${items.size} éléments — $url")
+            items
         }
 
     /**

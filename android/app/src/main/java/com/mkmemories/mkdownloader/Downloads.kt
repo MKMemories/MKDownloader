@@ -167,15 +167,13 @@ object Downloads {
             val request = YoutubeDLRequest(item.url).apply {
                 addOption("--no-playlist")
                 addOption("--extractor-args", Engine.YT_ARGS)
-                // Comptes : TF1/M6 par login, YouTube par cookies de session.
+                // Comptes : TF1/M6 par login, YouTube/Instagram/TikTok par cookies.
                 // Évite les échecs « connexion requise » au téléchargement.
                 Settings.credsForUrl(app, item.url)?.let {
                     addOption("--username", it.user)
                     addOption("--password", it.pass)
                 }
-                if (Settings.isYoutube(item.url)) {
-                    Settings.youtubeCookies(app)?.let { addOption("--cookies", it.absolutePath) }
-                }
+                Settings.cookiesForUrl(app, item.url)?.let { addOption("--cookies", it.absolutePath) }
                 addOption("-f", quality.format)
                 addOption("--continue")        // reprend un fichier partiel
                 if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
