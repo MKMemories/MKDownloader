@@ -82,6 +82,11 @@ class MainActivity : AppCompatActivity() {
     private var skeletonPulse: ObjectAnimator? = null
     private var wasDownloading = false
 
+    // Import d'un fichier cookies.txt (connexion YouTube fiable, hors WebView).
+    private val pickCookies = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { importCookiesFrom(it) } }
+
     // Mini-lecteur : contrôleur média branché sur le service musical.
     private var miniControllerFuture: ListenableFuture<MediaController>? = null
     private var miniController: MediaController? = null
@@ -820,21 +825,46 @@ class MainActivity : AppCompatActivity() {
         ui.accountButton.setOnClickListener { showYoutubeAccountDialog() }
     }
 
-    /** Réglage global : connexion YouTube par cookies (WebView), au besoin. */
+    /** Réglage global : connexion YouTube par cookies (import de fichier ou WebView). */
     private fun showYoutubeAccountDialog() {
         val connected = Settings.youtubeCookies(this) != null
-        val builder = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.yt_login_title)
-            .setMessage(if (connected) R.string.yt_login_connected else R.string.yt_login_desc)
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.yt_login_signin) { _, _ ->
-                startActivity(Intent(this, YoutubeLoginActivity::class.java))
-            }
-        if (connected) builder.setNeutralButton(R.string.yt_login_signout) { _, _ ->
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        // Méthode fiable en premier : import d'un cookies.txt exporté du navigateur.
+        actions += getString(R.string.yt_import_cookies) to { pickCookiesFile() }
+        actions += getString(R.string.yt_login_signin) to {
+            startActivity(Intent(this, YoutubeLoginActivity::class.java))
+        }
+        if (connected) actions += getString(R.string.yt_login_signout) to {
             Settings.clearYoutubeCookies(this)
             toast(getString(R.string.yt_login_cleared))
         }
-        builder.show()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.yt_login_title)
+            .setMessage(if (connected) R.string.yt_login_connected else R.string.yt_login_desc)
+            .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun pickCookiesFile() {
+        toast(getString(R.string.yt_import_pick))
+        runCatching { pickCookies.launch(arrayOf("text/plain", "text/*", "*/*")) }
+            .onFailure { toast(getString(R.string.cannot_open)) }
+    }
+
+    /** Copie le cookies.txt choisi dans le stockage privé après validation. */
+    private fun importCookiesFrom(uri: Uri) {
+        runCatching {
+            val text = contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }
+            require(text.contains("youtube.com", ignoreCase = true)) { "sans cookies YouTube" }
+            Settings.saveYoutubeCookies(this, text)
+        }.onSuccess {
+            Logs.d("account", "cookies YouTube importés (fichier)")
+            toast(getString(R.string.yt_login_ok))
+        }.onFailure {
+            Logs.w("account", "import cookies échoué : ${it.message}")
+            toast(getString(R.string.yt_import_bad))
+        }
     }
 
     private fun buildActorChips() {

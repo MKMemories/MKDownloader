@@ -49,4 +49,9 @@ object Settings {
     fun clearYoutubeCookies(c: Context) {
         File(c.filesDir, COOKIES).delete()
     }
+
+    /** Écrit le contenu d'un cookies.txt (import fichier ou capture WebView). */
+    fun saveYoutubeCookies(c: Context, text: String) {
+        File(c.filesDir, COOKIES).writeText(text)
+    }
 }

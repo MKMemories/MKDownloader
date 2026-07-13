@@ -192,11 +192,14 @@
     <string name="logs_empty">Journal vide pour l\'instant.</string>
     <string name="yt_login_button">🔑 Compte YouTube</string>
     <string name="yt_login_title">Connexion YouTube</string>
-    <string name="yt_login_desc">Réglage global : connectez-vous à YouTube pour les vidéos qui exigent une connexion (âge, membres, accès restreint). La connexion se fait dans une page Google intégrée (session privée) — utilisez de préférence un compte dédié à cet usage. Vos cookies de session sont ensuite transmis à yt-dlp.</string>
+    <string name="yt_login_desc">Réglage global pour les vidéos exigeant une connexion (âge, membres, accès restreint).\n\n• Méthode fiable : importez un fichier cookies.txt exporté depuis votre navigateur (extension « Get cookies.txt LOCALLY »).\n• Ou essayez la connexion Google intégrée (Google la bloque parfois : « navigateur non sécurisé »).</string>
+    <string name="yt_import_cookies">📄 Importer un fichier cookies.txt</string>
+    <string name="yt_import_pick">Choisissez votre fichier cookies.txt…</string>
+    <string name="yt_import_bad">Fichier invalide (aucun cookie YouTube détecté).</string>
     <string name="yt_login_connected">✅ Connecté. Les vidéos nécessitant une connexion utiliseront ce compte. Vous pouvez vous reconnecter (rafraîchir) ou vous déconnecter.</string>
     <string name="yt_login_signin">Se connecter</string>
     <string name="yt_login_signout">Se déconnecter</string>
-    <string name="yt_login_hint">Connectez-vous à votre compte Google, puis touchez « Enregistrer la connexion » une fois la page YouTube affichée.</string>
+    <string name="yt_login_hint">Connectez-vous à votre compte Google, puis touchez « Enregistrer la connexion » une fois la page YouTube affichée. Si Google refuse (« navigateur non sécurisé »), fermez et utilisez plutôt « Importer un fichier cookies.txt ».</string>
     <string name="yt_login_save">✓ Enregistrer la connexion</string>
     <string name="yt_login_ok">Connexion YouTube enregistrée ✔</string>
     <string name="yt_login_not_detected">Connexion non détectée — terminez la connexion à YouTube puis réessayez.</string>
