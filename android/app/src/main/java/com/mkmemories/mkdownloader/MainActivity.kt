@@ -825,25 +825,46 @@ class MainActivity : AppCompatActivity() {
         ui.accountButton.setOnClickListener { showYoutubeAccountDialog() }
     }
 
-    /** Réglage global : connexion YouTube par cookies (import de fichier ou WebView). */
+    /** Réglage global : connexion YouTube par cookies (import de fichier ou WebView).
+     *  Vue personnalisée (texte + boutons) : un AlertDialog ne peut PAS afficher à la
+     *  fois un message ET une liste — le message masquait les actions. */
     private fun showYoutubeAccountDialog() {
         val connected = Settings.youtubeCookies(this) != null
-        val actions = mutableListOf<Pair<String, () -> Unit>>()
-        // Méthode fiable en premier : import d'un cookies.txt exporté du navigateur.
-        actions += getString(R.string.yt_import_cookies) to { pickCookiesFile() }
-        actions += getString(R.string.yt_login_signin) to {
-            startActivity(Intent(this, YoutubeLoginActivity::class.java))
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
         }
-        if (connected) actions += getString(R.string.yt_login_signout) to {
+        box.addView(android.widget.TextView(this).apply {
+            setText(if (connected) R.string.yt_login_connected else R.string.yt_login_desc)
+            setPadding(0, 0, 0, (8 * d).toInt())
+        })
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.yt_login_title)
+            .setView(box)
+            .setNegativeButton(R.string.cancel, null)
+            .create()
+        fun add(textRes: Int, action: () -> Unit) {
+            box.addView(
+                android.widget.Button(this).apply {
+                    setText(textRes)
+                    setOnClickListener { dialog.dismiss(); action() }
+                },
+                android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        // Méthode fiable en premier : import d'un cookies.txt exporté du navigateur.
+        add(R.string.yt_import_cookies) { pickCookiesFile() }
+        add(R.string.yt_login_signin) { startActivity(Intent(this, YoutubeLoginActivity::class.java)) }
+        if (connected) add(R.string.yt_login_signout) {
             Settings.clearYoutubeCookies(this)
             toast(getString(R.string.yt_login_cleared))
         }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.yt_login_title)
-            .setMessage(if (connected) R.string.yt_login_connected else R.string.yt_login_desc)
-            .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+        dialog.show()
     }
 
     private fun pickCookiesFile() {
