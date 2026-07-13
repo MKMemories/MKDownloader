@@ -70,6 +70,8 @@ class MainActivity : AppCompatActivity() {
 
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
+    // Source de recherche (L'Analyste) : youtube | tiktok | instagram | all.
+    private var searchSource = "youtube"
     private var sourceFilter: String = "Tout"
     private var lastQuery: String = ""
     private var busy = false
@@ -823,7 +825,28 @@ class MainActivity : AppCompatActivity() {
         ui.importClips.setOnClickListener { importClips() }
         // Élargit les sources : liens/profils/hashtags TikTok & Instagram acceptés.
         ui.searchInputLayout.hint = getString(R.string.an_search_hint)
+        // Recherche multi-plateformes par sujet (YouTube réel, TikTok/IG par hashtag).
+        buildSourceChips()
         // La connexion (Comptes) est accessible via ⚙ Paramètres.
+    }
+
+    /** Puces de source de recherche (L'Analyste). */
+    private fun buildSourceChips() {
+        ui.searchSourceScroll.isVisible = true
+        ui.searchSourceChips.removeAllViews()
+        listOf(
+            "youtube" to "▶ YouTube",
+            "tiktok" to "🎵 TikTok",
+            "instagram" to "📷 Instagram",
+            "all" to "🌐 Toutes",
+        ).forEach { (key, label) ->
+            ui.searchSourceChips.addView(Chip(this).apply {
+                text = label
+                isCheckable = true
+                isChecked = key == searchSource
+                setOnClickListener { searchSource = key }
+            })
+        }
     }
 
     /** Menu ⚙ Paramètres : regroupe connexion, mises à jour et journal. */
@@ -1312,7 +1335,21 @@ class MainActivity : AppCompatActivity() {
         ui.homeScroll.isVisible = false
         lifecycleScope.launch {
             try {
-                val items = Engine.search(this@MainActivity, query, dateFilter)
+                val items = when (searchSource) {
+                    "tiktok" -> Engine.searchTag(this@MainActivity, query, "tiktok")
+                    "instagram" -> Engine.searchTag(this@MainActivity, query, "instagram")
+                    "all" -> {
+                        // Toutes les plateformes en parallèle, puis entrelacées.
+                        val yt = async {
+                            runCatching { Engine.search(this@MainActivity, query, dateFilter) }
+                                .getOrDefault(emptyList())
+                        }
+                        val tk = async { Engine.searchTag(this@MainActivity, query, "tiktok") }
+                        val ig = async { Engine.searchTag(this@MainActivity, query, "instagram") }
+                        interleave(yt.await(), tk.await(), ig.await())
+                    }
+                    else -> Engine.search(this@MainActivity, query, dateFilter)
+                }
                 results.submit(items)
                 ui.results.isVisible = items.isNotEmpty()
                 if (items.isEmpty()) toast(getString(R.string.no_results))
@@ -1322,6 +1359,18 @@ class MainActivity : AppCompatActivity() {
                 setBusy(false)
             }
         }
+    }
+
+    /** Entrelace plusieurs listes (round-robin) en dédupliquant par URL. */
+    private fun interleave(vararg lists: List<VideoItem>): List<VideoItem> {
+        val out = ArrayList<VideoItem>()
+        val seen = HashSet<String>()
+        val max = lists.maxOfOrNull { it.size } ?: 0
+        for (i in 0 until max) for (l in lists) if (i < l.size) {
+            val v = l[i]
+            if (seen.add(v.url)) out.add(v)
+        }
+        return out
     }
 
     /** Radio artiste : lance une station quasi infinie autour de l'artiste/du titre. */
