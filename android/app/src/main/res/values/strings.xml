@@ -190,6 +190,13 @@
     <string name="update_app">Mettre à jour l\'app</string>
     <string name="logs_export">🐞 Journal</string>
     <string name="logs_empty">Journal vide pour l\'instant.</string>
+    <string name="yt_login_button">🔑 Compte YouTube</string>
+    <string name="yt_login_title">Connexion YouTube</string>
+    <string name="yt_login_desc">Réglage global : ces identifiants sont transmis à yt-dlp pour les vidéos qui exigent une connexion (âge, membres, accès restreint). Laissez vide pour ne pas les utiliser.\n\nNote : Google bloque souvent la connexion par mot de passe (2FA, « confirmez que vous n\'êtes pas un robot »). Si ça échoue, dites-le-moi : j\'ajouterai l\'import de cookies, plus fiable.</string>
+    <string name="yt_login_user_hint">Adresse e-mail / identifiant Google</string>
+    <string name="yt_login_pass_hint">Mot de passe</string>
+    <string name="yt_login_clear">Effacer</string>
+    <string name="yt_login_cleared">Identifiants YouTube effacés</string>
     <string name="playlist_new_inline">➕ Nouvelle playlist…</string>
     <string name="playlist_rename">✏ Renommer</string>
     <string name="playlist_rename_failed">Nom déjà utilisé ou invalide.</string>

@@ -29,6 +29,9 @@ object Settings {
         return when {
             "tf1.fr" in u || "mytf1" in u -> creds(c, "tf1")
             "6play.fr" in u || "m6.fr" in u || "6play" in u -> creds(c, "m6")
+            // Compte YouTube global : utilisé pour les vidéos qui exigent une
+            // connexion (âge, membres, accès restreint). Réglage dans L'Analyste.
+            "youtube.com" in u || "youtu.be" in u -> creds(c, "youtube")
             else -> null
         }
     }

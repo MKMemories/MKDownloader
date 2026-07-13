@@ -815,6 +815,45 @@ class MainActivity : AppCompatActivity() {
         // Machine d'extraits : renvoyer une liste ID + plages → téléchargements.
         ui.importClips.isVisible = true
         ui.importClips.setOnClickListener { importClips() }
+        // Compte YouTube global (connexion requise par certaines vidéos).
+        ui.accountButton.isVisible = true
+        ui.accountButton.setOnClickListener { showYoutubeAccountDialog() }
+    }
+
+    /** Réglage global : identifiants YouTube transmis à yt-dlp au besoin. */
+    private fun showYoutubeAccountDialog() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val userIn = AppCompatEditText(this).apply {
+            hint = getString(R.string.yt_login_user_hint); setSingleLine(true)
+        }
+        val passIn = AppCompatEditText(this).apply {
+            hint = getString(R.string.yt_login_pass_hint); setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        Settings.creds(this, "youtube")?.let { userIn.setText(it.user); passIn.setText(it.pass) }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(userIn); addView(passIn)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.yt_login_title)
+            .setMessage(R.string.yt_login_desc)
+            .setView(box)
+            .setNeutralButton(R.string.yt_login_clear) { _, _ ->
+                Settings.setCreds(this, "youtube", "", "")
+                toast(getString(R.string.yt_login_cleared))
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                Settings.setCreds(
+                    this, "youtube",
+                    userIn.text.toString().trim(), passIn.text.toString(),
+                )
+                toast(getString(R.string.accounts_saved))
+            }
+            .show()
     }
 
     private fun buildActorChips() {

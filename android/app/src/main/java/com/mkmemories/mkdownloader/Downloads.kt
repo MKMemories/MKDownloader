@@ -167,6 +167,11 @@ object Downloads {
             val request = YoutubeDLRequest(item.url).apply {
                 addOption("--no-playlist")
                 addOption("--extractor-args", Engine.YT_ARGS)
+                // Compte (YouTube global, TF1/M6) : évite les échecs « connexion requise ».
+                Settings.credsForUrl(app, item.url)?.let {
+                    addOption("--username", it.user)
+                    addOption("--password", it.pass)
+                }
                 addOption("-f", quality.format)
                 addOption("--continue")        // reprend un fichier partiel
                 if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
