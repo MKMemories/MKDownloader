@@ -83,15 +83,26 @@ data class Quality(
     val audioMp3: Boolean = false,
 )
 
+// MP4 (H.264/AAC) en tête = sortie par défaut compatible partout (pas de .webm).
+// On préfère avc1+mp4a et on force le conteneur mp4 (remux rapide, sans ré-encodage).
 val QUALITIES = listOf(
-    Quality("max", "Qualité maximale", "bestvideo*+bestaudio/best", mergeMp4 = false),
     Quality(
-        "mp4", "Meilleur MP4 (compatible)",
+        "mp4", "MP4 — meilleure qualité compatible",
         "bestvideo*[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo*[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo*+bestaudio/best",
         mergeMp4 = true,
     ),
-    Quality("1080p", "Full HD 1080p", "bestvideo*[height<=1080]+bestaudio/best[height<=1080]/best", mergeMp4 = true),
-    Quality("720p", "HD 720p", "bestvideo*[height<=720]+bestaudio/best[height<=720]/best", mergeMp4 = true),
+    Quality(
+        "1080p", "MP4 — Full HD 1080p",
+        "bestvideo*[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo*[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/bestvideo*[height<=1080]+bestaudio/best[height<=1080]",
+        mergeMp4 = true,
+    ),
+    Quality(
+        "720p", "MP4 — HD 720p",
+        "bestvideo*[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo*[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/bestvideo*[height<=720]+bestaudio/best[height<=720]",
+        mergeMp4 = true,
+    ),
+    // Qualité absolue (4K/HDR VP9/AV1) : peut sortir en .webm/.mkv, moins compatible.
+    Quality("max", "Qualité maximale (peut être .webm)", "bestvideo*+bestaudio/best", mergeMp4 = false),
     Quality("audio", "Audio MP3", "bestaudio/best", mergeMp4 = false, audioMp3 = true),
 )
 
