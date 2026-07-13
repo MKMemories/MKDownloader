@@ -820,40 +820,21 @@ class MainActivity : AppCompatActivity() {
         ui.accountButton.setOnClickListener { showYoutubeAccountDialog() }
     }
 
-    /** Réglage global : identifiants YouTube transmis à yt-dlp au besoin. */
+    /** Réglage global : connexion YouTube par cookies (WebView), au besoin. */
     private fun showYoutubeAccountDialog() {
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val userIn = AppCompatEditText(this).apply {
-            hint = getString(R.string.yt_login_user_hint); setSingleLine(true)
-        }
-        val passIn = AppCompatEditText(this).apply {
-            hint = getString(R.string.yt_login_pass_hint); setSingleLine(true)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        Settings.creds(this, "youtube")?.let { userIn.setText(it.user); passIn.setText(it.pass) }
-        val box = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(pad, pad / 2, pad, 0)
-            addView(userIn); addView(passIn)
-        }
-        MaterialAlertDialogBuilder(this)
+        val connected = Settings.youtubeCookies(this) != null
+        val builder = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.yt_login_title)
-            .setMessage(R.string.yt_login_desc)
-            .setView(box)
-            .setNeutralButton(R.string.yt_login_clear) { _, _ ->
-                Settings.setCreds(this, "youtube", "", "")
-                toast(getString(R.string.yt_login_cleared))
-            }
+            .setMessage(if (connected) R.string.yt_login_connected else R.string.yt_login_desc)
             .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.save) { _, _ ->
-                Settings.setCreds(
-                    this, "youtube",
-                    userIn.text.toString().trim(), passIn.text.toString(),
-                )
-                toast(getString(R.string.accounts_saved))
+            .setPositiveButton(R.string.yt_login_signin) { _, _ ->
+                startActivity(Intent(this, YoutubeLoginActivity::class.java))
             }
-            .show()
+        if (connected) builder.setNeutralButton(R.string.yt_login_signout) { _, _ ->
+            Settings.clearYoutubeCookies(this)
+            toast(getString(R.string.yt_login_cleared))
+        }
+        builder.show()
     }
 
     private fun buildActorChips() {

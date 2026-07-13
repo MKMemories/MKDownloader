@@ -132,11 +132,15 @@ object Engine {
 
     // ---------- Analyse d'un lien unique ----------
 
-    /** Ajoute les identifiants TF1/M6 à une requête si l'URL en relève. */
+    /** Ajoute le compte (TF1/M6) et/ou les cookies YouTube à une requête yt-dlp. */
     private fun YoutubeDLRequest.applyCreds(context: Context, url: String) {
         Settings.credsForUrl(context, url)?.let {
             addOption("--username", it.user)
             addOption("--password", it.pass)
+        }
+        // YouTube : cookies d'une session connectée (voir YoutubeLoginActivity).
+        if (Settings.isYoutube(url)) {
+            Settings.youtubeCookies(context)?.let { addOption("--cookies", it.absolutePath) }
         }
     }
 
@@ -281,6 +285,9 @@ object Engine {
                     addOption("--sub-langs", "fr.*,en.*")
                     addOption("--sub-format", "vtt")
                     addOption("--extractor-args", YT_ARGS)
+                    if (Settings.isYoutube(url)) {
+                        Settings.youtubeCookies(context)?.let { addOption("--cookies", it.absolutePath) }
+                    }
                     addOption("--no-warnings")
                     addOption("-o", "${dir.absolutePath}/%(id)s.%(ext)s")
                 }

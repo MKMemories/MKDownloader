@@ -54,6 +54,12 @@
             android:theme="@style/Theme.MKDownloader" />
 
         <activity
+            android:name=".YoutubeLoginActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:theme="@style/Theme.MKDownloader" />
+
+        <activity
             android:name=".MovieDetailActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
