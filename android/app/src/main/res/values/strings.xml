@@ -192,6 +192,12 @@
     <string name="logs_export">🐞 Journal</string>
     <string name="logs_empty">Journal vide pour l\'instant.</string>
     <string name="yt_login_button">🔑 Comptes</string>
+    <string name="set_button">⚙ Paramètres</string>
+    <string name="set_title">Paramètres</string>
+    <string name="set_accounts">🔑 Comptes (connexion YouTube / Instagram)</string>
+    <string name="set_update_app">⬆️ Mettre à jour l\'application</string>
+    <string name="set_update_engine">🔄 Mettre à jour le moteur (yt-dlp)</string>
+    <string name="set_logs">🐞 Exporter le journal</string>
     <string name="acc_title">Comptes (connexion)</string>
     <string name="acc_youtube">▶ YouTube</string>
     <string name="acc_instagram">📷 Instagram</string>

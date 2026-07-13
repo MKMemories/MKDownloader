@@ -821,11 +821,27 @@ class MainActivity : AppCompatActivity() {
         // Machine d'extraits : renvoyer une liste ID + plages → téléchargements.
         ui.importClips.isVisible = true
         ui.importClips.setOnClickListener { importClips() }
-        // Comptes (YouTube / Instagram) : connexion requise par certains contenus.
-        ui.accountButton.isVisible = true
-        ui.accountButton.setOnClickListener { showAccountsMenu() }
         // Élargit les sources : liens/profils/hashtags TikTok & Instagram acceptés.
         ui.searchInputLayout.hint = getString(R.string.an_search_hint)
+        // La connexion (Comptes) est accessible via ⚙ Paramètres.
+    }
+
+    /** Menu ⚙ Paramètres : regroupe connexion, mises à jour et journal. */
+    private fun showSettingsDialog() {
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        if (isAnalyste) actions += getString(R.string.set_accounts) to { showAccountsMenu() }
+        actions += getString(R.string.set_update_app) to {
+            toast(getString(R.string.upd_checking)); checkAppUpdate(force = true)
+        }
+        actions += getString(R.string.set_update_engine) to { updateEngine() }
+        actions += getString(R.string.set_logs) to {
+            runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) }
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.set_title)
+            .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     /** Choix de la plateforme (YouTube / Instagram) puis actions de connexion. */
@@ -1158,9 +1174,7 @@ class MainActivity : AppCompatActivity() {
             currentItem?.let { Favorites.toggleVideo(this, it); updateFavCurrentLabel() }
         }
         ui.channelCurrent.setOnClickListener { currentItem?.let { openChannelFromVideo(it) } }
-        ui.updateButton.setOnClickListener { updateEngine() }
-        ui.appUpdateButton.setOnClickListener { toast(getString(R.string.upd_checking)); checkAppUpdate(force = true) }
-        ui.logsButton.setOnClickListener { runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) } }
+        ui.settingsButton.setOnClickListener { showSettingsDialog() }
         ui.channelBannerClose.setOnClickListener {
             ui.channelBanner.isVisible = false
             results.submit(emptyList()); ui.results.isVisible = false

@@ -439,61 +439,16 @@
                 android:paddingBottom="8dp"
                 android:visibility="gone" />
 
-            <HorizontalScrollView
-                android:layout_width="match_parent"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fillViewport="true"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_horizontal"
-                    android:gravity="center"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/updateButton"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="10dp"
-                        android:text="@string/update_engine"
-                        android:textColor="@color/text_dim" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/appUpdateButton"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="10dp"
-                        android:text="@string/update_app"
-                        android:textColor="@color/accent2" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/accountButton"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="10dp"
-                        android:text="@string/yt_login_button"
-                        android:textColor="@color/accent2"
-                        android:visibility="gone" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/logsButton"
-                        style="@style/Widget.Material3.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="10dp"
-                        android:text="@string/logs_export"
-                        android:textColor="@color/text_dim" />
-                </LinearLayout>
-            </HorizontalScrollView>
+                android:layout_gravity="center_horizontal"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:text="@string/set_button"
+                android:textColor="@color/text_dim" />
 
             <TextView
                 android:id="@+id/versionLabel"

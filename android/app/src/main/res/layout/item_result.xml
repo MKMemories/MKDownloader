@@ -36,6 +36,20 @@
                 android:contentDescription="@string/play"
                 android:src="@android:drawable/ic_media_play"
                 app:tint="#FFFFFF" />
+
+            <!-- Badge de source (YouTube / TikTok / Instagram…). -->
+            <TextView
+                android:id="@+id/resultSource"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="3dp"
+                android:background="@drawable/source_badge"
+                android:paddingHorizontal="5dp"
+                android:paddingVertical="1dp"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold" />
         </FrameLayout>
 
         <LinearLayout
