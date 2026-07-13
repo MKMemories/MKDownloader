@@ -49,10 +49,11 @@ class VideoAdapter(
             resultMeta.isVisible = meta.isNotEmpty()
             if (!item.thumbnail.isNullOrEmpty()) resultThumb.load(item.thumbnail)
 
-            // Badge de source : d'où vient la vidéo (YouTube / TikTok / Instagram…).
+            // Badge de source : affiché seulement pour les sources non-YouTube
+            // (évite de répéter « YouTube » sur chaque résultat).
             val src = platformOf(item.url)
             resultSource.text = src
-            resultSource.isVisible = src.isNotEmpty() && src != "Autre"
+            resultSource.isVisible = src.isNotEmpty() && src != "Autre" && src != "YouTube"
 
             favButton.setIconResource(
                 if (isFav(item)) android.R.drawable.btn_star_big_on

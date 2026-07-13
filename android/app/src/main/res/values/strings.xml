@@ -85,7 +85,6 @@
 
     <!-- Recherche -->
     <string name="search_hint">Recherche YouTube ou lien vidéo…</string>
-    <string name="an_search_hint">Recherche YouTube, ou lien/profil/hashtag (YouTube, TikTok, Instagram)…</string>
     <string name="analyzing">Analyse du lien…</string>
     <string name="searching">Recherche YouTube…</string>
     <string name="searching_recent">Recherche des publications récentes…</string>
@@ -191,23 +190,15 @@
     <string name="update_app">Mettre à jour l\'app</string>
     <string name="logs_export">🐞 Journal</string>
     <string name="logs_empty">Journal vide pour l\'instant.</string>
-    <string name="yt_login_button">🔑 Comptes</string>
     <string name="set_button">⚙ Paramètres</string>
     <string name="set_title">Paramètres</string>
-    <string name="set_accounts">🔑 Comptes (connexion YouTube / Instagram)</string>
+    <string name="set_accounts">🔑 Compte YouTube (connexion)</string>
     <string name="set_update_app">⬆️ Mettre à jour l\'application</string>
     <string name="set_update_engine">🔄 Mettre à jour le moteur (yt-dlp)</string>
     <string name="set_logs">🐞 Exporter le journal</string>
-    <string name="acc_title">Comptes (connexion)</string>
     <string name="acc_youtube">▶ YouTube</string>
-    <string name="acc_instagram">📷 Instagram</string>
-    <string name="acc_tiktok">🎵 TikTok</string>
-    <string name="src_empty_instagram">Instagram : rien trouvé. Importez vos cookies Instagram (⚙ Paramètres › Comptes) puis réessayez.</string>
-    <string name="src_empty_tiktok">TikTok momentanément indisponible (blocage TikTok côté extraction). Réessayez plus tard.</string>
-    <string name="acc_desc">Connectez-vous à %1$s pour les contenus qui l\'exigent (âge, membres, profils privés, accès restreint). Importez un fichier cookies.txt exporté depuis votre navigateur (extension « Get cookies.txt LOCALLY »).</string>
-    <string name="acc_connected">✅ %1$s connecté. Les contenus nécessitant une connexion utiliseront ce compte. Vous pouvez ré-importer (rafraîchir) ou vous déconnecter.</string>
-    <string name="browsing">Exploration du profil…</string>
-    <string name="browse_empty">Aucun contenu trouvé (profil privé, ou connexion requise ?).</string>
+    <string name="acc_desc">Connectez-vous à %1$s pour les vidéos qui l\'exigent (âge, membres, accès restreint). Importez un fichier cookies.txt exporté depuis votre navigateur (extension « Get cookies.txt LOCALLY »).</string>
+    <string name="acc_connected">✅ %1$s connecté. Les vidéos nécessitant une connexion utiliseront ce compte. Vous pouvez ré-importer (rafraîchir) ou vous déconnecter.</string>
     <string name="yt_login_title">Connexion YouTube</string>
     <string name="yt_login_desc">Réglage global pour les vidéos exigeant une connexion (âge, membres, accès restreint).\n\n• Méthode fiable : importez un fichier cookies.txt exporté depuis votre navigateur (extension « Get cookies.txt LOCALLY »).\n• Ou essayez la connexion Google intégrée (Google la bloque parfois : « navigateur non sécurisé »).</string>
     <string name="yt_import_cookies">📄 Importer un fichier cookies.txt</string>

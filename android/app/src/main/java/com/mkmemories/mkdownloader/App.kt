@@ -427,58 +427,6 @@ object Engine {
         }
 
     /**
-     * Liste le contenu d'un PROFIL / HASHTAG / chaîne / playlist (TikTok, Instagram,
-     * YouTube…) sans le télécharger : extraction « à plat » rapide. Applique les
-     * cookies de la plateforme (Instagram exige souvent une connexion).
-     */
-    suspend fun browseUrl(context: Context, url: String, limit: Int = 60): List<VideoItem> =
-        withContext(Dispatchers.IO) {
-            ensureReady(context)
-            val request = YoutubeDLRequest(url).apply {
-                addOption("--dump-single-json")
-                addOption("--flat-playlist")
-                addOption("--playlist-end", limit)
-                addOption("--no-warnings")
-                addOption("--extractor-args", YT_ARGS)
-                applyCreds(context, url)
-            }
-            val out = YoutubeDL.getInstance().execute(request, null, null).out
-            val start = out.indexOf('{')
-            if (start < 0) return@withContext emptyList()
-            val root = JSONObject(out.substring(start))
-            val items = entries(root).mapNotNull(::videoFromEntry)
-            Logs.d("browse", "${items.size} éléments — $url")
-            items
-        }
-
-    /** Slug hashtag : « Jean-Luc Mélenchon » → « jeanlucmelenchon » (sans accents). */
-    private fun slugTag(query: String): String =
-        java.text.Normalizer.normalize(query, java.text.Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
-            .lowercase()
-            .replace(Regex("[^a-z0-9]"), "")
-
-    /**
-     * Recherche « par sujet » sur TikTok / Instagram : faute de recherche par
-     * mot-clé sur ces plateformes, on passe par la page HASHTAG correspondante
-     * (best-effort ; Instagram exige des cookies). Renvoie une liste vide en cas
-     * d'échec plutôt que de faire échouer toute la recherche.
-     */
-    suspend fun searchTag(context: Context, query: String, platform: String): List<VideoItem> {
-        val slug = slugTag(query)
-        if (slug.isEmpty()) return emptyList()
-        val url = when (platform) {
-            "tiktok" -> "https://www.tiktok.com/tag/$slug"
-            "instagram" -> "https://www.instagram.com/explore/tags/$slug/"
-            else -> return emptyList()
-        }
-        return runCatching { browseUrl(context, url, 40) }.getOrElse {
-            Logs.w("browse", "recherche $platform échouée pour #$slug : ${it.message}")
-            emptyList()
-        }
-    }
-
-    /**
      * URL d'un flux vidéo **progressif unique** (vidéo+audio déjà muxés) pour un
      * démarrage quasi instantané et un cast direct. On privilégie le meilleur MP4
      * combiné (jusqu'à 720p côté YouTube) : pas de fusion à la volée = pas de latence.

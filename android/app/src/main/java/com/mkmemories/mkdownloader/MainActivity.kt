@@ -70,8 +70,6 @@ class MainActivity : AppCompatActivity() {
 
     private var currentItem: VideoItem? = null
     private var dateFilter: DateFilter = DateFilter.ANY
-    // Source de recherche (L'Analyste) : youtube | tiktok | instagram | all.
-    private var searchSource = "youtube"
     private var sourceFilter: String = "Tout"
     private var lastQuery: String = ""
     private var busy = false
@@ -823,36 +821,15 @@ class MainActivity : AppCompatActivity() {
         // Machine d'extraits : renvoyer une liste ID + plages → téléchargements.
         ui.importClips.isVisible = true
         ui.importClips.setOnClickListener { importClips() }
-        // Élargit les sources : liens/profils/hashtags TikTok & Instagram acceptés.
-        ui.searchInputLayout.hint = getString(R.string.an_search_hint)
-        // Recherche multi-plateformes par sujet (YouTube réel, TikTok/IG par hashtag).
-        buildSourceChips()
-        // La connexion (Comptes) est accessible via ⚙ Paramètres.
-    }
-
-    /** Puces de source de recherche (L'Analyste). */
-    private fun buildSourceChips() {
-        ui.searchSourceScroll.isVisible = true
-        ui.searchSourceChips.removeAllViews()
-        listOf(
-            "youtube" to "▶ YouTube",
-            "tiktok" to "🎵 TikTok",
-            "instagram" to "📷 Instagram",
-            "all" to "🌐 Toutes",
-        ).forEach { (key, label) ->
-            ui.searchSourceChips.addView(Chip(this).apply {
-                text = label
-                isCheckable = true
-                isChecked = key == searchSource
-                setOnClickListener { searchSource = key }
-            })
-        }
+        // Connexion (Comptes YouTube) accessible via ⚙ Paramètres.
     }
 
     /** Menu ⚙ Paramètres : regroupe connexion, mises à jour et journal. */
     private fun showSettingsDialog() {
         val actions = mutableListOf<Pair<String, () -> Unit>>()
-        if (isAnalyste) actions += getString(R.string.set_accounts) to { showAccountsMenu() }
+        if (isAnalyste) actions += getString(R.string.set_accounts) to {
+            showCookiesDialog("youtube", getString(R.string.acc_youtube), allowWebLogin = true)
+        }
         actions += getString(R.string.set_update_app) to {
             toast(getString(R.string.upd_checking)); checkAppUpdate(force = true)
         }
@@ -863,24 +840,6 @@ class MainActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.set_title)
             .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    /** Choix de la plateforme (YouTube / Instagram) puis actions de connexion. */
-    private fun showAccountsMenu() {
-        // Triple(plateforme, libellé, connexion WebView Google possible ?)
-        val platforms = listOf(
-            Triple("youtube", getString(R.string.acc_youtube), true),
-            Triple("instagram", getString(R.string.acc_instagram), false),
-            Triple("tiktok", getString(R.string.acc_tiktok), false),
-        )
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.acc_title)
-            .setItems(platforms.map { it.second }.toTypedArray()) { _, i ->
-                val (platform, label, web) = platforms[i]
-                showCookiesDialog(platform, label, web)
-            }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
@@ -1224,47 +1183,8 @@ class MainActivity : AppCompatActivity() {
         closeSuggest(ui.searchInput)
         val input = ui.searchInput.text?.toString().orEmpty().trim()
         if (input.isEmpty() || busy) return
-        when {
-            !(input.startsWith("http://") || input.startsWith("https://")) -> searchVideos(input)
-            // Profil / hashtag TikTok ou Instagram → on LISTE le contenu.
-            isListingUrl(input) -> browseUrlResults(input)
-            // Vidéo isolée (toutes plateformes) → analyse.
-            else -> analyzeUrl(input)
-        }
-    }
-
-    /** Vrai pour un lien de PROFIL ou HASHTAG (à lister), faux pour une vidéo isolée. */
-    private fun isListingUrl(url: String): Boolean {
-        val u = url.lowercase()
-        return when {
-            "tiktok.com" in u -> "/video/" !in u && ("/@" in u || "/tag/" in u)
-            "instagram.com" in u || "instagr.am" in u ->
-                "/explore/tags/" in u ||
-                    ("/p/" !in u && "/reel/" !in u && "/reels/" !in u && "/tv/" !in u &&
-                        "/stories/" !in u &&
-                        Regex("instagram\\.com/[a-z0-9._]+/?(\\?|$)").containsMatchIn(u))
-            else -> false
-        }
-    }
-
-    /** Liste le contenu d'un profil / hashtag et l'affiche comme des résultats. */
-    private fun browseUrlResults(url: String) {
-        setBusy(true, R.string.browsing)
-        ui.videoCard.isVisible = false
-        ui.channelBanner.isVisible = false
-        ui.homeScroll.isVisible = false
-        lifecycleScope.launch {
-            try {
-                val items = Engine.browseUrl(this@MainActivity, url)
-                results.submit(items)
-                ui.results.isVisible = items.isNotEmpty()
-                if (items.isEmpty()) toast(getString(R.string.browse_empty))
-            } catch (e: Exception) {
-                toast(cleanError(e))
-            } finally {
-                setBusy(false)
-            }
-        }
+        if (input.startsWith("http://") || input.startsWith("https://")) analyzeUrl(input)
+        else searchVideos(input)
     }
 
     private fun setBusy(value: Boolean, statusRes: Int? = null) {
@@ -1336,49 +1256,16 @@ class MainActivity : AppCompatActivity() {
         ui.homeScroll.isVisible = false
         lifecycleScope.launch {
             try {
-                val items = when (searchSource) {
-                    "tiktok" -> Engine.searchTag(this@MainActivity, query, "tiktok")
-                    "instagram" -> Engine.searchTag(this@MainActivity, query, "instagram")
-                    "all" -> {
-                        // Toutes les plateformes en parallèle, puis entrelacées.
-                        val yt = async {
-                            runCatching { Engine.search(this@MainActivity, query, dateFilter) }
-                                .getOrDefault(emptyList())
-                        }
-                        val tk = async { Engine.searchTag(this@MainActivity, query, "tiktok") }
-                        val ig = async { Engine.searchTag(this@MainActivity, query, "instagram") }
-                        interleave(yt.await(), tk.await(), ig.await())
-                    }
-                    else -> Engine.search(this@MainActivity, query, dateFilter)
-                }
+                val items = Engine.search(this@MainActivity, query, dateFilter)
                 results.submit(items)
                 ui.results.isVisible = items.isNotEmpty()
-                if (items.isEmpty()) toast(getString(emptyMsgFor(searchSource)))
+                if (items.isEmpty()) toast(getString(R.string.no_results))
             } catch (e: Exception) {
                 toast(cleanError(e))
             } finally {
                 setBusy(false)
             }
         }
-    }
-
-    /** Message d'absence de résultat adapté à la source (aide à comprendre pourquoi). */
-    private fun emptyMsgFor(source: String): Int = when (source) {
-        "instagram" -> R.string.src_empty_instagram
-        "tiktok" -> R.string.src_empty_tiktok
-        else -> R.string.no_results
-    }
-
-    /** Entrelace plusieurs listes (round-robin) en dédupliquant par URL. */
-    private fun interleave(vararg lists: List<VideoItem>): List<VideoItem> {
-        val out = ArrayList<VideoItem>()
-        val seen = HashSet<String>()
-        val max = lists.maxOfOrNull { it.size } ?: 0
-        for (i in 0 until max) for (l in lists) if (i < l.size) {
-            val v = l[i]
-            if (seen.add(v.url)) out.add(v)
-        }
-        return out
     }
 
     /** Radio artiste : lance une station quasi infinie autour de l'artiste/du titre. */
