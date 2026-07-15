@@ -113,6 +113,10 @@
 
     <!-- Téléchargement -->
     <string name="choose_quality">Qualité du téléchargement</string>
+    <string name="q_advanced">⚙ Qualité avancée (formats réels)…</string>
+    <string name="q_advanced_title">Formats disponibles</string>
+    <string name="q_probing">Analyse des formats…</string>
+    <string name="q_none">Impossible de lister les formats de cette vidéo.</string>
     <string name="download_started">Téléchargement lancé — suivez la progression en bas.</string>
     <string name="batch_started">Téléchargement de la playlist lancé.</string>
     <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>

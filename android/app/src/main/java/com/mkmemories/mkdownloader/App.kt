@@ -428,6 +428,77 @@ object Engine {
             title to items
         }
 
+    /** Une qualité vidéo réellement disponible (pour le sélecteur PRO). */
+    data class VideoQuality(val height: Int, val label: String, val format: String)
+
+    private fun codecLabel(v: String): String = when {
+        v.startsWith("av01") -> "AV1"
+        v.startsWith("vp9") || v.startsWith("vp09") -> "VP9"
+        v.startsWith("avc1") || v.startsWith("h264") -> "H.264"
+        v.startsWith("hev") || v.startsWith("hvc") -> "HEVC"
+        v.isEmpty() || v == "none" -> ""
+        else -> v.substringBefore(".")
+    }
+
+    private fun humanSize(bytes: Long): String {
+        if (bytes <= 0) return ""
+        val mb = bytes / (1024.0 * 1024.0)
+        return if (mb >= 1024) String.format("%.1f Go", mb / 1024) else String.format("%.0f Mo", mb)
+    }
+
+    /**
+     * Liste les qualités vidéo RÉELLEMENT disponibles pour une URL (interroge yt-dlp).
+     * Une entrée par résolution, avec le meilleur codec, HDR, fps et taille estimée.
+     */
+    suspend fun videoQualityOptions(context: Context, url: String): List<VideoQuality> =
+        withContext(Dispatchers.IO) {
+            ensureReady(context)
+            val request = YoutubeDLRequest(url).apply {
+                addOption("--no-playlist"); addOption("--no-warnings")
+                addOption("--dump-single-json")
+                addOption("--extractor-args", YT_ARGS)
+                applyCreds(context, url)
+            }
+            val out = YoutubeDL.getInstance().execute(request, null, null).out
+            val start = out.indexOf('{')
+            if (start < 0) return@withContext emptyList()
+            val formats = JSONObject(out.substring(start)).optJSONArray("formats")
+                ?: return@withContext emptyList()
+
+            var bestAudio = 0L
+            val byHeight = HashMap<Int, JSONObject>()
+            for (i in 0 until formats.length()) {
+                val f = formats.optJSONObject(i) ?: continue
+                val v = f.optString("vcodec", "none")
+                val a = f.optString("acodec", "none")
+                val size = f.optLong("filesize", f.optLong("filesize_approx", 0))
+                if (v == "none") {
+                    if (a != "none" && size > bestAudio) bestAudio = size
+                    continue
+                }
+                val h = f.optInt("height", 0)
+                if (h <= 0) continue
+                val prevTbr = byHeight[h]?.optDouble("tbr", 0.0) ?: -1.0
+                if (f.optDouble("tbr", 0.0) > prevTbr) byHeight[h] = f
+            }
+            byHeight.entries.sortedByDescending { it.key }.map { (h, f) ->
+                val codec = codecLabel(f.optString("vcodec", ""))
+                val fps = f.optInt("fps", 0)
+                val dr = f.optString("dynamic_range", "")
+                val hdr = dr.isNotEmpty() && dr != "SDR"
+                val vsize = f.optLong("filesize", f.optLong("filesize_approx", 0))
+                val total = if (vsize > 0) vsize + bestAudio else 0L
+                val label = buildList {
+                    add("${h}p")
+                    if (codec.isNotEmpty()) add(codec)
+                    if (hdr) add("HDR")
+                    if (fps > 0) add("$fps fps")
+                    humanSize(total).takeIf { it.isNotEmpty() }?.let { add("~$it") }
+                }.joinToString(" • ")
+                VideoQuality(h, label, "bv*[height<=$h]+ba/b[height<=$h]")
+            }
+        }
+
     /**
      * URL d'un flux vidéo **progressif unique** (vidéo+audio déjà muxés) pour un
      * démarrage quasi instantané et un cast direct. On privilégie le meilleur MP4

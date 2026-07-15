@@ -1691,12 +1691,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun askQualityAndDownload(item: VideoItem) {
+        val labels = QUALITIES.map { it.label } + getString(R.string.q_advanced)
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_quality)
-            .setItems(QUALITIES.map { it.label }.toTypedArray()) { _, index ->
-                launchDownload(item, QUALITIES[index])
+            .setItems(labels.toTypedArray()) { _, index ->
+                if (index < QUALITIES.size) launchDownload(item, QUALITIES[index])
+                else showAdvancedQuality(item)
             }
             .show()
+    }
+
+    /** Sélecteur PRO : interroge les formats RÉELS de la vidéo (4K/8K, AV1/VP9/H.264,
+     *  HDR, fps, taille estimée) et laisse choisir précisément. */
+    private fun showAdvancedQuality(item: VideoItem) {
+        setBusy(true, R.string.q_probing)
+        lifecycleScope.launch {
+            val opts = runCatching { Engine.videoQualityOptions(this@MainActivity, item.url) }
+                .getOrDefault(emptyList())
+            setBusy(false)
+            if (opts.isEmpty()) { toast(getString(R.string.q_none)); return@launch }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.q_advanced_title)
+                .setItems(opts.map { it.label }.toTypedArray()) { _, i ->
+                    val o = opts[i]
+                    launchDownload(item, Quality("adv${o.height}", o.label, o.format, mergeMp4 = true))
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
     }
 
     private fun downloadMp3(item: VideoItem) = launchDownload(item, AUDIO_QUALITY)
