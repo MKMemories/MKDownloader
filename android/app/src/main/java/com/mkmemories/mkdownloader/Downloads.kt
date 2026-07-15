@@ -164,6 +164,7 @@ object Downloads {
         var success = false
         try {
             workDir.mkdirs()
+            val sectioned = job.startSec != null && job.endSec != null && job.endSec > job.startSec
             val request = YoutubeDLRequest(item.url).apply {
                 addOption("--no-playlist")
                 addOption("--extractor-args", Engine.YT_ARGS)
@@ -176,12 +177,35 @@ object Downloads {
                 Settings.cookiesForUrl(app, item.url)?.let { addOption("--cookies", it.absolutePath) }
                 addOption("-f", quality.format)
                 addOption("--continue")        // reprend un fichier partiel
+
+                // VITESSE : aria2c en téléchargeur externe (16 connexions parallèles)
+                // pour les téléchargements complets. Les extraits (sections) restent
+                // sur le téléchargeur natif (aria2c ne gère pas --download-sections),
+                // accéléré par les fragments concurrents.
+                if (sectioned) {
+                    addOption("--concurrent-fragments", "8")
+                } else {
+                    addOption("--downloader", "libaria2c.so")
+                    addOption("--downloader", "m3u8:native")  // HLS : plus fiable en natif
+                    addOption("--downloader-args", "aria2c:-x 16 -s 16 -k 1M")
+                    addOption("--concurrent-fragments", "8")  // segments restés natifs
+                }
+
                 if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
                 if (quality.audioMp3) {
                     addOption("--extract-audio")
-                    addOption("--audio-format", "mp3")
+                    addOption("--audio-format", quality.audioFormat)
+                    addOption("--audio-quality", "0")   // meilleure qualité (VBR max)
                 }
-                if (job.startSec != null && job.endSec != null && job.endSec > job.startSec) {
+
+                // FICHIERS « premium » : pochette, métadonnées et chapitres incrustés.
+                // La pochette n'est incrustée que dans les conteneurs qui la gèrent
+                // sûrement (mp4/m4a/mp3/flac) — on évite un échec sur webm/mkv (« max »).
+                if (quality.mergeMp4 || quality.audioMp3) addOption("--embed-thumbnail")
+                addOption("--embed-metadata")
+                if (!quality.audioMp3) addOption("--embed-chapters")
+
+                if (sectioned) {
                     addOption("--download-sections", "*${job.startSec}-${job.endSec}")
                     addOption("--force-keyframes-at-cuts")
                 }

@@ -2,6 +2,7 @@ package com.mkmemories.mkdownloader
 
 import android.app.Application
 import android.content.Context
+import com.yausername.aria2c.Aria2c
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
@@ -57,6 +58,7 @@ object Engine {
             if (ready) return@withLock
             YoutubeDL.getInstance().init(context.applicationContext)
             FFmpeg.getInstance().init(context.applicationContext)
+            runCatching { Aria2c.getInstance().init(context.applicationContext) }  // téléchargeur rapide
             ready = true
         }
     }

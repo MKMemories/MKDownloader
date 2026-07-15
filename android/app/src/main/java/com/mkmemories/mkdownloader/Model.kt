@@ -81,6 +81,7 @@ data class Quality(
     val format: String,
     val mergeMp4: Boolean,
     val audioMp3: Boolean = false,
+    val audioFormat: String = "mp3",
 )
 
 // MP4 (H.264/AAC) en tête = sortie par défaut compatible partout (pas de .webm).
@@ -103,7 +104,8 @@ val QUALITIES = listOf(
     ),
     // Qualité absolue (4K/HDR VP9/AV1) : peut sortir en .webm/.mkv, moins compatible.
     Quality("max", "Qualité maximale (peut être .webm)", "bestvideo*+bestaudio/best", mergeMp4 = false),
-    Quality("audio", "Audio MP3", "bestaudio/best", mergeMp4 = false, audioMp3 = true),
+    Quality("audio", "Audio MP3 (qualité max)", "bestaudio/best", mergeMp4 = false, audioMp3 = true, audioFormat = "mp3"),
+    Quality("flac", "Audio FLAC (sans perte)", "bestaudio/best", mergeMp4 = false, audioMp3 = true, audioFormat = "flac"),
 )
 
 val AUDIO_QUALITY = QUALITIES.first { it.audioMp3 }

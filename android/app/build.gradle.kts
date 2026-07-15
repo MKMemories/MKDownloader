@@ -11,8 +11,8 @@ android {
         applicationId = "com.mkmemories.mkdownloader"
         minSdk = 24
         targetSdk = 35
-        versionCode = 85
-        versionName = "5.70"
+        versionCode = 86
+        versionName = "5.71"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -97,6 +97,8 @@ dependencies {
     // Moteur : Python + yt-dlp + ffmpeg empaquetés pour Android.
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
+    // aria2c : téléchargeur externe multi-connexions (téléchargements ×5-10).
+    implementation("io.github.junkfood02.youtubedl-android:aria2c:0.18.1")
 
     // Interface Android TV « 10-foot » (uniquement pour le flavor tv).
     "tvImplementation"("androidx.leanback:leanback:1.0.0")
