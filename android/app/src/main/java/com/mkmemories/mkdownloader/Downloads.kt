@@ -35,6 +35,7 @@ object Downloads {
         val quality: Quality,
         val startSec: Int? = null,
         val endSec: Int? = null,
+        val recordSeconds: Int? = null,   // enregistrement d'un direct : durée d'une tranche
         var status: Status = Status.QUEUED,
         var percent: Int = -1,
         var error: String? = null,
@@ -94,6 +95,31 @@ object Downloads {
         kick(context.applicationContext)
         notifyAll()
         return job
+    }
+
+    /**
+     * Enregistre un flux DIRECT/live découpé en tranches de 5 min. On empile N jobs
+     * séquentiels : chacun enregistre 300 s du direct à partir de son démarrage → des
+     * tranches consécutives (léger trou de reconnexion entre deux). Renvoie N.
+     */
+    fun recordLive(
+        context: Context,
+        item: VideoItem,
+        headers: Map<String, String>,
+        totalMinutes: Int,
+    ): Int {
+        val n = (totalMinutes / 5).coerceAtLeast(1)
+        registerHeaders(item.url, headers)
+        val q = Quality("record", "Direct", "best/bv*+ba/b", mergeMp4 = true)
+        for (i in 1..n) {
+            val part = item.copy(title = "${item.title} — partie $i")
+            jobsList.add(Job(newId(), part, q, recordSeconds = 300))
+        }
+        persist(context)
+        DownloadService.start(context.applicationContext)
+        kick(context.applicationContext)
+        notifyAll()
+        return n
     }
 
     /** Ajoute tout un lot (playlist, chaîne…) à la file. */
@@ -174,7 +200,8 @@ object Downloads {
         var success = false
         try {
             workDir.mkdirs()
-            val sectioned = job.startSec != null && job.endSec != null && job.endSec > job.startSec
+            val recording = (job.recordSeconds ?: 0) > 0
+            val sectioned = !recording && job.startSec != null && job.endSec != null && job.endSec > job.startSec
             val request = YoutubeDLRequest(item.url).apply {
                 addOption("--no-playlist")
                 addOption("--extractor-args", Engine.YT_ARGS)
@@ -192,15 +219,20 @@ object Downloads {
 
                 // VITESSE : aria2c en téléchargeur externe (16 connexions parallèles)
                 // pour les téléchargements complets. Les extraits (sections) restent
-                // sur le téléchargeur natif (aria2c ne gère pas --download-sections),
-                // accéléré par les fragments concurrents.
-                if (sectioned) {
-                    addOption("--concurrent-fragments", "8")
-                } else {
-                    addOption("--downloader", "libaria2c.so")
-                    addOption("--downloader", "m3u8:native")  // HLS : plus fiable en natif
-                    addOption("--downloader-args", "aria2c:-x 16 -s 16 -k 1M")
-                    addOption("--concurrent-fragments", "8")  // segments restés natifs
+                // sur le téléchargeur natif ; l'enregistrement d'un direct passe par
+                // ffmpeg avec une durée limite (une tranche).
+                when {
+                    recording -> {
+                        addOption("--downloader", "ffmpeg")
+                        addOption("--downloader-args", "ffmpeg_o:-t ${job.recordSeconds}")
+                    }
+                    sectioned -> addOption("--concurrent-fragments", "8")
+                    else -> {
+                        addOption("--downloader", "libaria2c.so")
+                        addOption("--downloader", "m3u8:native")  // HLS : plus fiable en natif
+                        addOption("--downloader-args", "aria2c:-x 16 -s 16 -k 1M")
+                        addOption("--concurrent-fragments", "8")  // segments restés natifs
+                    }
                 }
 
                 if (quality.mergeMp4) addOption("--merge-output-format", "mp4")
@@ -211,11 +243,13 @@ object Downloads {
                 }
 
                 // FICHIERS « premium » : pochette, métadonnées et chapitres incrustés.
-                // La pochette n'est incrustée que dans les conteneurs qui la gèrent
-                // sûrement (mp4/m4a/mp3/flac) — on évite un échec sur webm/mkv (« max »).
-                if (quality.mergeMp4 || quality.audioMp3) addOption("--embed-thumbnail")
-                addOption("--embed-metadata")
-                if (!quality.audioMp3) addOption("--embed-chapters")
+                // Ignoré pour l'enregistrement d'un direct (post-traitement fragile
+                // sur un flux live coupé). Pochette : conteneurs sûrs uniquement.
+                if (!recording) {
+                    if (quality.mergeMp4 || quality.audioMp3) addOption("--embed-thumbnail")
+                    addOption("--embed-metadata")
+                    if (!quality.audioMp3) addOption("--embed-chapters")
+                }
 
                 if (sectioned) {
                     addOption("--download-sections", "*${job.startSec}-${job.endSec}")

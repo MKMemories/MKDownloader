@@ -157,7 +157,32 @@ class BrowserActivity : AppCompatActivity() {
         val labels = entries.map { (u, t) -> "$t • ${shortUrl(u)}" }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.br_captured_title)
-            .setItems(labels.toTypedArray()) { _, i -> downloadStream(entries[i].first, entries[i].second) }
+            .setItems(labels.toTypedArray()) { _, i -> showStreamActions(entries[i].first, entries[i].second) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** Pour un flux : télécharger (VOD) ou enregistrer un direct par tranches de 5 min. */
+    private fun showStreamActions(streamUrl: String, type: String) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(shortUrl(streamUrl))
+            .setItems(arrayOf(getString(R.string.br_dl), getString(R.string.br_record))) { _, i ->
+                if (i == 0) downloadStream(streamUrl, type) else askRecordDuration(streamUrl)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun askRecordDuration(streamUrl: String) {
+        val labels = arrayOf("30 min", "1 h", "2 h", "3 h")
+        val mins = intArrayOf(30, 60, 120, 180)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.br_record_title)
+            .setItems(labels) { _, i ->
+                val item = streamItem(streamUrl)
+                val n = Downloads.recordLive(this, item, captureHeaders(streamUrl), mins[i])
+                toast(getString(R.string.br_record_started, n))
+            }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
@@ -168,23 +193,24 @@ class BrowserActivity : AppCompatActivity() {
         return if (file.length in 1..40) "$host/$file" else host
     }
 
+    /** En-têtes de session à joindre au flux (Referer = page, Cookie, User-Agent). */
+    private fun captureHeaders(streamUrl: String): Map<String, String> = buildMap {
+        put("Referer", web.url ?: streamUrl)
+        put("User-Agent", MOBILE_UA)
+        CookieManager.getInstance().getCookie(streamUrl)?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
+    }
+
+    private fun streamItem(streamUrl: String): VideoItem = VideoItem(
+        url = streamUrl,
+        title = web.title?.takeIf { it.isNotBlank() } ?: shortUrl(streamUrl),
+        uploader = runCatching { android.net.Uri.parse(web.url ?: streamUrl).host }.getOrNull(),
+        durationSec = 0,
+        thumbnail = null,
+    )
+
     private fun downloadStream(streamUrl: String, type: String) {
-        val pageUrl = web.url ?: streamUrl
-        val headers = buildMap {
-            put("Referer", pageUrl)
-            put("User-Agent", MOBILE_UA)
-            CookieManager.getInstance().getCookie(streamUrl)?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
-        }
-        Downloads.registerHeaders(streamUrl, headers)
-        val title = web.title?.takeIf { it.isNotBlank() } ?: shortUrl(streamUrl)
-        val item = VideoItem(
-            url = streamUrl,
-            title = title,
-            uploader = runCatching { android.net.Uri.parse(pageUrl).host }.getOrNull(),
-            durationSec = 0,
-            thumbnail = null,
-        )
-        Downloads.start(this, item, Quality("capture", type, "bv*+ba/b/best", mergeMp4 = true))
+        Downloads.registerHeaders(streamUrl, captureHeaders(streamUrl))
+        Downloads.start(this, streamItem(streamUrl), Quality("capture", type, "bv*+ba/b/best", mergeMp4 = true))
         toast(getString(R.string.download_queued))
     }
 

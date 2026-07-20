@@ -123,6 +123,10 @@
     <string name="br_capture">⬇ %1$d flux</string>
     <string name="br_captured_title">Flux vidéo détectés</string>
     <string name="br_none">Aucun flux détecté. Lance la lecture de la vidéo sur la page.</string>
+    <string name="br_dl">⬇ Télécharger</string>
+    <string name="br_record">⏺ Enregistrer le direct (tranches de 5 min)</string>
+    <string name="br_record_title">Durée d\'enregistrement</string>
+    <string name="br_record_started">Enregistrement lancé : %1$d tranches de 5 min en file.</string>
     <string name="download_started">Téléchargement lancé — suivez la progression en bas.</string>
     <string name="batch_started">Téléchargement de la playlist lancé.</string>
     <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>
