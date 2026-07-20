@@ -117,6 +117,12 @@
     <string name="q_advanced_title">Formats disponibles</string>
     <string name="q_probing">Analyse des formats…</string>
     <string name="q_none">Impossible de lister les formats de cette vidéo.</string>
+    <string name="br_button">🌐 Capturer une vidéo (navigateur)</string>
+    <string name="br_url_hint">Adresse du site ou recherche…</string>
+    <string name="br_go">Aller</string>
+    <string name="br_capture">⬇ %1$d flux</string>
+    <string name="br_captured_title">Flux vidéo détectés</string>
+    <string name="br_none">Aucun flux détecté. Lance la lecture de la vidéo sur la page.</string>
     <string name="download_started">Téléchargement lancé — suivez la progression en bas.</string>
     <string name="batch_started">Téléchargement de la playlist lancé.</string>
     <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>

@@ -821,6 +821,9 @@ class MainActivity : AppCompatActivity() {
         // Machine d'extraits : renvoyer une liste ID + plages → téléchargements.
         ui.importClips.isVisible = true
         ui.importClips.setOnClickListener { importClips() }
+        // Navigateur « capteur de flux » : télécharger la vidéo de n'importe quel site.
+        ui.browserButton.isVisible = true
+        ui.browserButton.setOnClickListener { startActivity(Intent(this, BrowserActivity::class.java)) }
         // Connexion (Comptes YouTube) accessible via ⚙ Paramètres.
     }
 

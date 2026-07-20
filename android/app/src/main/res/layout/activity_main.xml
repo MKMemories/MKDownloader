@@ -198,6 +198,15 @@
                 android:text="@string/an_clips_button"
                 android:visibility="gone" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/browserButton"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/br_button"
+                android:visibility="gone" />
+
 
             <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/searchProgress"

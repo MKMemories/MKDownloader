@@ -43,6 +43,16 @@ object Downloads {
     private val jobsList = CopyOnWriteArrayList<Job>()
     private val counter = AtomicLong(0)
 
+    // En-têtes HTTP capturés par le navigateur intégré (Referer / Cookie / UA),
+    // par URL de flux. Nécessaires pour télécharger certains flux protégés par
+    // referer/session. En mémoire (pas besoin de survivre à un redémarrage).
+    private val extraHeaders = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
+
+    /** Enregistre les en-têtes à utiliser pour télécharger un flux capturé. */
+    fun registerHeaders(url: String, headers: Map<String, String>) {
+        if (headers.isNotEmpty()) extraHeaders[url] = headers
+    }
+
     fun jobs(): List<Job> = jobsList.toList()
     fun active(): Job? = jobsList.firstOrNull { it.status == Status.RUNNING }
         ?: jobsList.firstOrNull { it.status == Status.QUEUED }
@@ -175,6 +185,8 @@ object Downloads {
                     addOption("--password", it.pass)
                 }
                 Settings.cookiesForUrl(app, item.url)?.let { addOption("--cookies", it.absolutePath) }
+                // En-têtes capturés par le navigateur intégré (Referer / Cookie / UA).
+                extraHeaders[item.url]?.forEach { (k, v) -> addOption("--add-header", "$k: $v") }
                 addOption("-f", quality.format)
                 addOption("--continue")        // reprend un fichier partiel
 
