@@ -13,6 +13,7 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -39,7 +40,10 @@ object Downloads {
         var status: Status = Status.QUEUED,
         var percent: Int = -1,
         var error: String? = null,
-    )
+    ) {
+        /** Vrai si l'utilisateur a annulé : on ne la repasse pas en ERROR. */
+        @Volatile var canceled: Boolean = false
+    }
 
     private val jobsList = CopyOnWriteArrayList<Job>()
     private val counter = AtomicLong(0)
@@ -152,6 +156,28 @@ object Downloads {
         notifyAll()
     }
 
+    /**
+     * Annule une tâche, EN COURS ou en attente : le process yt-dlp est tué, la
+     * tâche est retirée de la file et ses fichiers partiels effacés.
+     */
+    fun cancel(context: Context, id: String) {
+        val job = jobsList.find { it.id == id } ?: return
+        job.canceled = true
+        if (job.status == Status.RUNNING) {
+            runCatching { YoutubeDL.getInstance().destroyProcessById(job.id) }
+        }
+        jobsList.remove(job)
+        workDir(context, job).deleteRecursively()
+        persist(context)
+        notifyAll()
+    }
+
+    /** Annule toutes les tâches non terminées. */
+    fun cancelAll(context: Context) {
+        jobsList.filter { it.status == Status.RUNNING || it.status == Status.QUEUED }
+            .forEach { cancel(context, it.id) }
+    }
+
     fun clearFinished(context: Context) {
         jobsList.filter { it.status == Status.DONE || it.status == Status.ERROR }.forEach {
             workDir(context, it).deleteRecursively()
@@ -163,22 +189,38 @@ object Downloads {
 
     // ---------- Boucle de traitement ----------
 
+    /** Réclame atomiquement la prochaine tâche en attente et la passe EN COURS. */
+    private fun claimNext(app: Context): Job? {
+        val job = synchronized(jobsList) {
+            jobsList.firstOrNull { it.status == Status.QUEUED }?.also {
+                it.status = Status.RUNNING; it.percent = -1
+            }
+        } ?: return null
+        persist(app); notifyAll()
+        return job
+    }
+
     private fun kick(app: Context) {
         if (working) return
         working = true
         scope.launch {
             try {
-                while (true) {
-                    val job = jobsList.firstOrNull { it.status == Status.QUEUED } ?: break
-                    job.status = Status.RUNNING; job.percent = -1
-                    persist(app); notifyAll()
-                    try {
-                        downloadOne(app, job) { p -> job.percent = p; notifyAll() }
-                        job.status = Status.DONE; job.percent = 100
-                    } catch (e: Exception) {
-                        job.status = Status.ERROR; job.error = cleanError(e)
+                // Pool de N workers → téléchargements PARALLÈLES.
+                coroutineScope {
+                    repeat(MAX_PARALLEL) {
+                        launch {
+                            while (true) {
+                                val job = claimNext(app) ?: break
+                                try {
+                                    downloadOne(app, job) { p -> job.percent = p; notifyAll() }
+                                    if (!job.canceled) { job.status = Status.DONE; job.percent = 100 }
+                                } catch (e: Exception) {
+                                    if (!job.canceled) { job.status = Status.ERROR; job.error = cleanError(e) }
+                                }
+                                if (!job.canceled) { persist(app); notifyAll() }
+                            }
+                        }
                     }
-                    persist(app); notifyAll()
                 }
             } finally {
                 working = false
@@ -317,6 +359,7 @@ object Downloads {
 
     private const val PREFS = "mkdl_dlqueue"
     private const val KEY = "jobs"
+    private const val MAX_PARALLEL = 2   // téléchargements simultanés
 
     private fun persist(context: Context) {
         val arr = JSONArray()

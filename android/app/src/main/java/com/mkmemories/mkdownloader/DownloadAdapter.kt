@@ -45,7 +45,11 @@ class DownloadAdapter(
                 if (job.percent >= 0) dlProgress.setProgressCompat(job.percent, true)
             }
             dlRetry.isVisible = job.status == Downloads.Status.ERROR
-            dlRemove.isVisible = !running
+            // Toujours visible : sur une tâche EN COURS, c'est un bouton d'annulation.
+            dlRemove.isVisible = true
+            dlRemove.contentDescription = ctx.getString(
+                if (running) R.string.dl_cancel else R.string.delete
+            )
             dlRetry.setOnClickListener { onRetry(job) }
             dlRemove.setOnClickListener { onRemove(job) }
         }

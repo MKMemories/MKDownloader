@@ -194,6 +194,8 @@
     <string name="dl_status_all_done">%1$d téléchargement(s) terminé(s) ✔</string>
     <string name="dl_queue_title">File de téléchargements</string>
     <string name="dl_clear_finished">Effacer terminés</string>
+    <string name="dl_cancel">Annuler</string>
+    <string name="dl_cancel_all">Tout annuler</string>
     <string name="dl_queue_empty">Aucun téléchargement.</string>
     <string name="dl_status_queued">En attente…</string>
     <string name="dl_status_running">Téléchargement… %1$d%%</string>

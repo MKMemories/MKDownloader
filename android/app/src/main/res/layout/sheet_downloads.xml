@@ -23,10 +23,22 @@
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/dlCancelAll"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
+            android:text="@string/dl_cancel_all"
+            android:textColor="@color/text_dim" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/dlClearFinished"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
             android:text="@string/dl_clear_finished"
             android:textColor="@color/text_dim" />
     </LinearLayout>

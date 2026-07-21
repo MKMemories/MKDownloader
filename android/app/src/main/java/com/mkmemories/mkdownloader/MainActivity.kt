@@ -1849,7 +1849,7 @@ class MainActivity : AppCompatActivity() {
         val empty = view.findViewById<View>(R.id.dlQueueEmpty)
         val adapter = DownloadAdapter(
             onRetry = { Downloads.retry(this, it.id) },
-            onRemove = { Downloads.remove(this, it.id) },
+            onRemove = { Downloads.cancel(this, it.id) },   // annule aussi les tâches EN COURS
         )
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
@@ -1857,6 +1857,9 @@ class MainActivity : AppCompatActivity() {
         empty.isVisible = Downloads.jobs().isEmpty()
         view.findViewById<View>(R.id.dlClearFinished).setOnClickListener {
             Downloads.clearFinished(this)
+        }
+        view.findViewById<View>(R.id.dlCancelAll).setOnClickListener {
+            Downloads.cancelAll(this)
         }
         dlQueueAdapter = adapter
         dlQueueEmptyView = empty
