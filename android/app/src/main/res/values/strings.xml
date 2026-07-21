@@ -118,6 +118,8 @@
     <string name="q_probing">Analyse des formats…</string>
     <string name="q_none">Impossible de lister les formats de cette vidéo.</string>
     <string name="br_button">🌐 Capturer une vidéo (navigateur)</string>
+    <string name="br_button_short">🌐 Capturer</string>
+    <string name="an_clips_short">📋 Extraits</string>
     <string name="br_url_hint">Adresse du site ou recherche…</string>
     <string name="br_go">Aller</string>
     <string name="br_capture">⬇ %1$d flux</string>

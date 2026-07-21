@@ -16,8 +16,8 @@
         android:padding="8dp">
 
         <FrameLayout
-            android:layout_width="104dp"
-            android:layout_height="58dp">
+            android:layout_width="132dp"
+            android:layout_height="76dp">
 
             <com.google.android.material.imageview.ShapeableImageView
                 android:id="@+id/resultThumb"

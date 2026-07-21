@@ -188,25 +188,42 @@
                     android:visibility="gone" />
             </LinearLayout>
 
-            <!-- Analyse : machine d'extraits (liste ID + plages → téléchargements). -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/importClips"
-                style="@style/Widget.Material3.Button.TonalButton"
+            <!-- Analyse : capture navigateur + machine d'extraits (rangée compacte). -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="@string/an_clips_button"
-                android:visibility="gone" />
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/browserButton"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="@string/br_button"
-                android:visibility="gone" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/browserButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="6dp"
+                    android:text="@string/br_button_short"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/importClips"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="6dp"
+                    android:text="@string/an_clips_short"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/searchProgress"

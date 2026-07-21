@@ -811,9 +811,7 @@ class MainActivity : AppCompatActivity() {
         // Nav focalisée : masque musique & cinéma.
         ui.bottomNav.menu.removeItem(R.id.nav_music)
         ui.bottomNav.menu.removeItem(R.id.nav_cinema)
-        // Recherche thématique par personnalité + sélection multiple.
-        ui.actorScroll.isVisible = true
-        buildActorChips()
+        // (Les filtres rapides « personnalités » ont été retirés — interface épurée.)
         ui.analyseTools.isVisible = true
         ui.selectToggle.setOnClickListener { toggleSelectionMode() }
         ui.trSelection.setOnClickListener { transcribeSelection() }
