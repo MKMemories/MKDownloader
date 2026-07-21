@@ -88,15 +88,26 @@ class BrowserActivity : AppCompatActivity() {
             )
             addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
+        // 🎯 Cible la vraie vidéo (scan du DOM), visible en permanence.
+        val targetBtn = Button(this).apply {
+            text = getString(R.string.br_target)
+            setOnClickListener { targetMainVideo() }
+        }
         captureBtn = Button(this).apply {
             text = getString(R.string.br_capture, 0)
             visibility = View.GONE
             setOnClickListener { showCaptured() }
         }
+        val actionsBar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+            addView(captureBtn)
+            addView(targetBtn)
+        }
         val root = FrameLayout(this).apply {
             addView(col)
             addView(
-                captureBtn,
+                actionsBar,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).apply {
@@ -121,9 +132,10 @@ class BrowserActivity : AppCompatActivity() {
         web.loadUrl(u)
     }
 
-    /** Chaque requête réseau du navigateur : on repère les flux vidéo. */
+    /** Chaque requête réseau du navigateur : on repère les flux vidéo (hors pubs). */
     private fun onRequest(url: String) {
         val type = mediaType(url) ?: return
+        if (isAd(url)) return   // pubs / trackers : on ignore
         val added = synchronized(captured) {
             if (captured.containsKey(url) || captured.size >= MAX) false
             else { captured[url] = type; true }
@@ -151,15 +163,72 @@ class BrowserActivity : AppCompatActivity() {
         }
     }
 
+    /** Publicités / trackers vidéo à ignorer (source du bruit « N mini-vidéos »). */
+    private fun isAd(url: String): Boolean {
+        val low = url.lowercase()
+        return AD_HOSTS.any { it in low } || AD_PATHS.any { it in low }
+    }
+
+    /** Score de pertinence : le flux principal (manifeste, même domaine) remonte. */
+    private fun score(url: String, type: String): Int {
+        var s = when (type) {
+            "HLS" -> 80
+            "DASH" -> 70
+            else -> 40   // .mp4/.webm… souvent des pubs ou des extraits
+        }
+        val low = url.lowercase()
+        if ("master" in low || "playlist" in low || "manifest" in low) s += 20
+        if ("/ad" in low || "advert" in low || "preroll" in low) s -= 60
+        pageHost?.let { host -> if (host.isNotEmpty() && host in low) s += 25 }
+        return s
+    }
+
+    private var pageHost: String? = null
+
     private fun showCaptured() {
         val entries = synchronized(captured) { captured.entries.map { it.key to it.value } }
         if (entries.isEmpty()) { toast(getString(R.string.br_none)); return }
-        val labels = entries.map { (u, t) -> "$t • ${shortUrl(u)}" }
+        pageHost = runCatching { android.net.Uri.parse(web.url ?: "").host }.getOrNull()
+        val ranked = entries.sortedByDescending { score(it.first, it.second) }
+        val labels = ranked.mapIndexed { i, (u, t) ->
+            (if (i == 0) "⭐ " else "") + "$t • ${shortUrl(u)}"
+        }
         MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.br_captured_title)
-            .setItems(labels.toTypedArray()) { _, i -> showStreamActions(entries[i].first, entries[i].second) }
+            .setTitle(getString(R.string.br_captured_title_n, ranked.size))
+            .setItems(labels.toTypedArray()) { _, i -> showStreamActions(ranked[i].first, ranked[i].second) }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    /** 🎯 Scanne le DOM : trouve la plus grande balise <video> à l'écran et capte SON
+     *  flux (précis, contourne les pubs). Repli sur les flux réseau détectés. */
+    private fun targetMainVideo() {
+        web.evaluateJavascript(JS_FIND_VIDEO) { raw ->
+            val json = runCatching {
+                val inner = org.json.JSONTokener(raw).nextValue()
+                org.json.JSONObject(if (inner is String) inner else raw)
+            }.getOrNull()
+            val found = json?.optBoolean("found") == true
+            val src = json?.optString("src").orEmpty()
+            when {
+                found && src.startsWith("http") -> {
+                    val type = mediaType(src) ?: "VIDEO"
+                    val w = json!!.optInt("w"); val h = json.optInt("h")
+                    toast(getString(R.string.br_target_found, w, h))
+                    showStreamActions(src, type)
+                }
+                found -> {
+                    // Vidéo repérée mais flux interne (blob/MSE) → on utilise le réseau.
+                    val w = json!!.optInt("w"); val h = json.optInt("h")
+                    toast(getString(R.string.br_target_stream, w, h))
+                    showCaptured()
+                }
+                else -> {
+                    toast(getString(R.string.br_target_none))
+                    showCaptured()
+                }
+            }
+        }
     }
 
     /** Pour un flux : télécharger (VOD) ou enregistrer un direct par tranches de 5 min. */
@@ -227,5 +296,36 @@ class BrowserActivity : AppCompatActivity() {
         private const val MOBILE_UA =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) " +
                 "Chrome/120.0.0.0 Mobile Safari/537.36"
+
+        // Régies pub / trackers vidéo → source du bruit « N mini-vidéos ».
+        private val AD_HOSTS = listOf(
+            "doubleclick", "googlesyndication", "googleadservices", "google-analytics",
+            "googletagservices", "imasdk", "adservice", "adsystem", "amazon-adsystem",
+            "moatads", "adsafeprotected", "teads", "taboola", "outbrain", "criteo",
+            "adnxs", "2mdn.net", "innovid", "springserve", "spotx", "smartadserver",
+            "adform", "yieldmo", "pubmatic", "rubiconproject", "scorecardresearch",
+        )
+        private val AD_PATHS = listOf(
+            "/vast", "/vmap", "/ads/", "/ad/", "/advert", "/preroll", "/midroll", "/commercial",
+        )
+
+        // Scan DOM : renvoie la plus grande balise <video> visible et sa source.
+        private const val JS_FIND_VIDEO = """
+            (function(){
+              try {
+                var vids = Array.prototype.slice.call(document.querySelectorAll('video'));
+                var best=null, bestArea=0;
+                vids.forEach(function(v){
+                  var r=v.getBoundingClientRect();
+                  var a=r.width*r.height;
+                  if(r.width>0 && r.height>0 && a>bestArea){ bestArea=a; best=v; }
+                });
+                if(!best) return JSON.stringify({found:false});
+                var src=best.currentSrc||best.src||'';
+                if(!src){ var s=best.querySelector('source'); if(s) src=s.src||''; }
+                return JSON.stringify({found:true, src:src, w:best.videoWidth||0, h:best.videoHeight||0, paused:best.paused});
+              } catch(e){ return JSON.stringify({found:false}); }
+            })();
+        """
     }
 }
