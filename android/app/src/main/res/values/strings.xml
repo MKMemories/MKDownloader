@@ -124,6 +124,7 @@
     <string name="br_captured_title">Flux vidéo détectés</string>
     <string name="br_captured_title_n">Flux détectés (%1$d) — ⭐ = principal</string>
     <string name="br_target">🎯 Cibler la vidéo</string>
+    <string name="br_page">Télécharger cette page (auto, yt-dlp)</string>
     <string name="br_target_found">Vidéo ciblée (%1$d×%2$d) — flux direct.</string>
     <string name="br_target_stream">Vidéo repérée (%1$d×%2$d). Choisis son flux ci-dessous.</string>
     <string name="br_target_none">Aucune balise vidéo (lecteur intégré ?). Utilise les flux détectés.</string>

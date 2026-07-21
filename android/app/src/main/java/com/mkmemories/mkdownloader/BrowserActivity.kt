@@ -151,14 +151,32 @@ class BrowserActivity : AppCompatActivity() {
     private fun mediaType(url: String): String? {
         val low = url.lowercase()
         val path = low.substringBefore('?').substringBefore('#')
-        if ("thumb" in low || "preview" in low || path.endsWith(".jpg") || path.endsWith(".png")) return null
+        // Images, sous-titres et SEGMENTS (.ts/.m4s…) : on ignore — c'est le
+        // manifeste (ou la page) qu'on veut, pas des centaines de morceaux.
+        if ("thumb" in low || "preview" in low ||
+            path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
+            path.endsWith(".gif") || path.endsWith(".webp") || path.endsWith(".svg") ||
+            path.endsWith(".ts") || path.endsWith(".m4s") || path.endsWith(".aac") ||
+            path.endsWith(".vtt") || path.endsWith(".srt")
+        ) return null
         return when {
-            path.endsWith(".m3u8") || ".m3u8" in low -> "HLS"
-            path.endsWith(".mpd") -> "DASH"
+            ".m3u8" in low || path.endsWith(".m3u") -> "HLS"
+            ".mpd" in low -> "DASH"
+            ".ism" in low || path.endsWith(".f4m") -> "STREAM"
             path.endsWith(".mp4") || path.endsWith(".m4v") -> "MP4"
             path.endsWith(".webm") -> "WEBM"
-            path.endsWith(".mov") -> "MOV"
             path.endsWith(".mkv") -> "MKV"
+            path.endsWith(".mov") -> "MOV"
+            path.endsWith(".flv") -> "FLV"
+            path.endsWith(".avi") -> "AVI"
+            path.endsWith(".3gp") || path.endsWith(".3g2") -> "3GP"
+            path.endsWith(".ogv") || path.endsWith(".ogg") -> "OGG"
+            path.endsWith(".mpg") || path.endsWith(".mpeg") -> "MPEG"
+            path.endsWith(".wmv") || path.endsWith(".asf") -> "WMV"
+            // Flux SANS extension : on se fie aux indices présents dans l'URL.
+            "videoplayback" in low || "mime=video" in low || "manifest" in low ||
+                "format=m3u8" in low || "format=hls" in low || "/hls/" in low ||
+                "/dash/" in low || "type=video" in low || "/manifest" in low -> "VIDEO"
             else -> null
         }
     }
@@ -186,16 +204,24 @@ class BrowserActivity : AppCompatActivity() {
     private var pageHost: String? = null
 
     private fun showCaptured() {
-        val entries = synchronized(captured) { captured.entries.map { it.key to it.value } }
-        if (entries.isEmpty()) { toast(getString(R.string.br_none)); return }
         pageHost = runCatching { android.net.Uri.parse(web.url ?: "").host }.getOrNull()
-        val ranked = entries.sortedByDescending { score(it.first, it.second) }
-        val labels = ranked.mapIndexed { i, (u, t) ->
-            (if (i == 0) "⭐ " else "") + "$t • ${shortUrl(u)}"
+        val ranked = synchronized(captured) { captured.entries.map { it.key to it.value } }
+            .sortedByDescending { score(it.first, it.second) }
+        // Filet universel toujours proposé : laisser yt-dlp extraire la page
+        // (gère HLS/DASH/direct + 1700 sites, même sans flux repéré au réseau).
+        val options = ranked.toMutableList()
+        web.url?.takeIf { it.startsWith("http") }?.let { options.add(it to "PAGE") }
+        if (options.isEmpty()) { toast(getString(R.string.br_none)); return }
+        val labels = options.mapIndexed { i, (u, t) ->
+            when {
+                t == "PAGE" -> "🌐 " + getString(R.string.br_page)
+                i == 0 -> "⭐ $t • ${shortUrl(u)}"
+                else -> "$t • ${shortUrl(u)}"
+            }
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.br_captured_title_n, ranked.size))
-            .setItems(labels.toTypedArray()) { _, i -> showStreamActions(ranked[i].first, ranked[i].second) }
+            .setItems(labels.toTypedArray()) { _, i -> showStreamActions(options[i].first, options[i].second) }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }
