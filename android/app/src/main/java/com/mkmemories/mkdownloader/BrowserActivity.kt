@@ -269,8 +269,8 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun askRecordDuration(streamUrl: String) {
-        val labels = arrayOf("30 min", "1 h", "2 h", "3 h")
-        val mins = intArrayOf(30, 60, 120, 180)
+        val labels = arrayOf("5 min", "10 min", "30 min", "1 h", "2 h", "3 h")
+        val mins = intArrayOf(5, 10, 30, 60, 120, 180)
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.br_record_title)
             .setItems(labels) { _, i ->
