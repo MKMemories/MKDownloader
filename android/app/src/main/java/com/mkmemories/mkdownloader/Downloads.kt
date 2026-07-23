@@ -106,18 +106,28 @@ object Downloads {
      * séquentiels : chacun enregistre 300 s du direct à partir de son démarrage → des
      * tranches consécutives (léger trou de reconnexion entre deux). Renvoie N.
      */
+    /**
+     * @param totalMinutes durée totale à enregistrer.
+     * @param chunkMinutes taille d'une tranche ; 0 ou ≥ total ⇒ UN SEUL fichier
+     *        continu (sans découpe), pour les longs formats.
+     * Renvoie le nombre de fichiers créés.
+     */
     fun recordLive(
         context: Context,
         item: VideoItem,
         headers: Map<String, String>,
         totalMinutes: Int,
+        chunkMinutes: Int,
     ): Int {
-        val n = (totalMinutes / 5).coerceAtLeast(1)
         registerHeaders(item.url, headers)
+        val total = totalMinutes.coerceAtLeast(1)
+        val chunk = if (chunkMinutes <= 0) total else minOf(chunkMinutes, total)
+        val n = ((total + chunk - 1) / chunk).coerceAtLeast(1)
+        val secs = (chunk * 60).coerceAtLeast(1)
         val q = Quality("record", "Direct", "best/bv*+ba/b", mergeMp4 = true)
         for (i in 1..n) {
-            val part = item.copy(title = "${item.title} — partie $i")
-            jobsList.add(Job(newId(), part, q, recordSeconds = 300))
+            val label = if (n > 1) "${item.title} — partie $i" else item.title
+            jobsList.add(Job(newId(), item.copy(title = label), q, recordSeconds = secs))
         }
         persist(context)
         DownloadService.start(context.applicationContext)

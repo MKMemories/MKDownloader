@@ -269,16 +269,47 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun askRecordDuration(streamUrl: String) {
-        val labels = arrayOf("5 min", "10 min", "30 min", "1 h", "2 h", "3 h")
-        val mins = intArrayOf(5, 10, 30, 60, 120, 180)
+        val d = resources.displayMetrics.density
+        val pad = (16 * d).toInt()
+        val input = EditText(this).apply {
+            hint = getString(R.string.br_record_minutes)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText("30")
+            setSingleLine(true)
+        }
+        // Raccourcis rapides sous le champ libre.
+        val chips = com.google.android.material.chip.ChipGroup(this).apply {
+            isSingleLine = false
+            intArrayOf(5, 10, 30, 60, 120, 180).forEach { m ->
+                addView(com.google.android.material.chip.Chip(this@BrowserActivity).apply {
+                    text = if (m < 60) "$m min" else "${m / 60} h"
+                    setOnClickListener { input.setText(m.toString()) }
+                })
+            }
+        }
+        val continuous = android.widget.CheckBox(this).apply {
+            text = getString(R.string.br_record_continuous)
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+            addView(chips)
+            addView(continuous)
+        }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.br_record_title)
-            .setItems(labels) { _, i ->
-                val item = streamItem(streamUrl)
-                val n = Downloads.recordLive(this, item, captureHeaders(streamUrl), mins[i])
-                toast(getString(R.string.br_record_started, n))
-            }
+            .setView(box)
             .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.br_record_go) { _, _ ->
+                val minutes = input.text?.toString()?.trim()?.toIntOrNull()?.coerceIn(1, 720) ?: 30
+                val chunk = if (continuous.isChecked) 0 else 5   // 0 = fichier continu
+                val n = Downloads.recordLive(this, streamItem(streamUrl), captureHeaders(streamUrl), minutes, chunk)
+                toast(
+                    if (n > 1) getString(R.string.br_record_started, n)
+                    else getString(R.string.br_record_started_one),
+                )
+            }
             .show()
     }
 

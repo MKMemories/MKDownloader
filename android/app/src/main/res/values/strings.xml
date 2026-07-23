@@ -134,7 +134,11 @@
     <string name="br_dl">⬇ Télécharger</string>
     <string name="br_record">⏺ Enregistrer le direct (tranches de 5 min)</string>
     <string name="br_record_title">Durée d\'enregistrement</string>
+    <string name="br_record_minutes">Durée en minutes (ex. 45)</string>
+    <string name="br_record_continuous">Fichier continu (sans découpe en 5 min)</string>
+    <string name="br_record_go">Enregistrer</string>
     <string name="br_record_started">Enregistrement lancé : %1$d tranches de 5 min en file.</string>
+    <string name="br_record_started_one">Enregistrement lancé (1 fichier).</string>
     <string name="download_started">Téléchargement lancé — suivez la progression en bas.</string>
     <string name="batch_started">Téléchargement de la playlist lancé.</string>
     <string name="one_at_a_time">Un téléchargement est déjà en cours, patientez.</string>
