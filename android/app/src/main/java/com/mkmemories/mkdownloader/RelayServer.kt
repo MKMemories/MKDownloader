@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedOutputStream
@@ -30,6 +31,10 @@ object RelayServer {
     private lateinit var app: Context
     private var server: ServerSocket? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // URLs demandées VIA LE RELAIS (session) : on n'expose QUE celles-ci côté
+    // iPhone — jamais tout l'historique privé du téléphone.
+    private val relayUrls = java.util.Collections.synchronizedSet(HashSet<String>())
 
     fun start(context: Context, pinCode: String): Boolean {
         if (running) return true
@@ -115,6 +120,10 @@ object RelayServer {
                 if (query["pin"] != pin) { writeText(out, "403 Forbidden", "application/json", "{}"); return }
                 writeText(out, "200 OK", "application/json", statusJson())
             }
+            path == "/api/search" -> {
+                if (query["pin"] != pin) { writeText(out, "403 Forbidden", "application/json", "{}"); return }
+                writeText(out, "200 OK", "application/json", searchJson(query["q"].orEmpty()))
+            }
             path == "/api/add" -> {
                 val form = parseQuery(body)
                 if (form["pin"] != pin) { writeText(out, "403 Forbidden", "application/json", "{}"); return }
@@ -135,13 +144,33 @@ object RelayServer {
         scope.launch {
             val item = runCatching { Engine.getInfo(app, url) }.getOrNull()
                 ?: VideoItem(url = url, title = url, uploader = null, durationSec = 0, thumbnail = null)
+            relayUrls.add(item.url)
             Downloads.start(app, item, quality)
         }
     }
 
+    private fun searchJson(q: String): String {
+        if (q.isBlank()) return "{\"results\":[]}"
+        val items = runCatching { runBlocking { Engine.search(app, q, DateFilter.ANY, 25) } }
+            .getOrDefault(emptyList())
+        val arr = JSONArray()
+        items.forEach {
+            arr.put(
+                JSONObject()
+                    .put("url", it.url)
+                    .put("title", it.title)
+                    .put("thumb", it.thumbnail ?: "")
+                    .put("by", it.uploader ?: it.channelName ?: ""),
+            )
+        }
+        return JSONObject().put("results", arr).toString()
+    }
+
     private fun statusJson(): String {
+        val urls = synchronized(relayUrls) { relayUrls.toSet() }
         val jobs = JSONArray()
-        Downloads.jobs().forEach { j ->
+        // Uniquement les téléchargements lancés via le relais (pas l'historique privé).
+        Downloads.jobs().filter { it.item.url in urls }.forEach { j ->
             jobs.put(
                 JSONObject()
                     .put("title", j.item.title)
@@ -150,14 +179,16 @@ object RelayServer {
             )
         }
         val files = JSONArray()
-        runCatching { History.all(app) }.getOrDefault(emptyList()).forEach { e ->
-            files.put(
-                JSONObject()
-                    .put("id", e.id)
-                    .put("title", e.title)
-                    .put("audio", e.audio),
-            )
-        }
+        runCatching { History.all(app) }.getOrDefault(emptyList())
+            .filter { e -> urls.any { e.id.endsWith("-" + it.hashCode()) } }
+            .forEach { e ->
+                files.put(
+                    JSONObject()
+                        .put("id", e.id)
+                        .put("title", e.title)
+                        .put("audio", e.audio),
+                )
+            }
         return JSONObject().put("jobs", jobs).put("files", files).toString()
     }
 
@@ -170,7 +201,10 @@ object RelayServer {
         rangeEnd: Long,
     ) {
         val entry = runCatching { History.all(app) }.getOrDefault(emptyList()).find { it.id == id }
-        if (entry == null) { writeText(out, "404 Not Found", "text/plain", "404"); return }
+        // Confidentialité : on ne sert QUE les fichiers demandés via le relais.
+        val isRelay = entry != null &&
+            synchronized(relayUrls) { relayUrls.any { entry.id.endsWith("-" + it.hashCode()) } }
+        if (entry == null || !isRelay) { writeText(out, "404 Not Found", "text/plain", "404"); return }
         val uri = Uri.parse(entry.uri)
         val total = runCatching {
             app.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize }
@@ -242,65 +276,92 @@ object RelayServer {
         return null
     }
 
-    // Page web (client iPhone) — autonome, sans dépendance externe.
+    // Page web (client iPhone) — autonome, aux couleurs MK, avec recherche YouTube.
     private val PAGE = """
 <!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>MK Relais</title>
+<meta name="apple-mobile-web-app-title" content="MKDownloader">
+<title>MKDownloader</title>
 <style>
- body{margin:0;background:#0b0b0f;color:#eee;font-family:-apple-system,system-ui,sans-serif}
- .wrap{max-width:640px;margin:0 auto;padding:16px}
- h1{font-size:20px;color:#a78bfa;margin:8px 0 16px}
- input,select,button{font-size:16px;border-radius:12px;border:1px solid #333;background:#16161d;color:#eee;padding:12px;width:100%;box-sizing:border-box;margin:6px 0}
- button{background:#7c5cff;border:none;font-weight:600}
- .row{display:flex;gap:8px}.row>*{margin:6px 0}
- .card{background:#16161d;border-radius:14px;padding:12px;margin:8px 0}
- .prog{height:6px;background:#333;border-radius:6px;overflow:hidden}.bar{height:6px;background:#7c5cff;width:0}
- a.dl{display:inline-block;background:#22c55e;color:#001;padding:8px 12px;border-radius:10px;text-decoration:none;font-weight:600}
- small{color:#888}
-</style></head><body><div class="wrap">
- <h1>MK Relais</h1>
+ :root{--bg:#0a0a0f;--card:#15151d;--line:#26262f;--accent:#7c5cff;--accent2:#a78bfa;--ok:#22c55e}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:#f2f2f5;font-family:-apple-system,system-ui,sans-serif}
+ header{position:sticky;top:0;background:rgba(10,10,15,.92);backdrop-filter:blur(8px);padding:14px 16px;border-bottom:1px solid var(--line);z-index:5}
+ header b{font-size:19px;color:#fff}header b span{color:var(--accent2)}
+ .wrap{max-width:680px;margin:0 auto;padding:14px 16px 40px}
+ input,select,button{font-size:16px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:#f2f2f5;padding:13px}
+ input,select{width:100%;margin:6px 0}
+ button{background:var(--accent);border:none;font-weight:700;color:#fff}
+ .searchrow{display:flex;gap:8px;margin:4px 0}.searchrow input{margin:0}.searchrow button{white-space:nowrap;padding:13px 18px}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin:10px 0}
+ .res{display:flex;gap:12px;align-items:center}
+ .res img{width:132px;height:76px;object-fit:cover;border-radius:10px;background:#000;flex:none}
+ .res .t{font-weight:600;font-size:14px;line-height:1.25;max-height:3.2em;overflow:hidden}
+ .res small{color:#9a9aa6}
+ .res button{margin-top:6px;padding:8px 12px;font-size:14px;border-radius:10px}
+ .prog{height:6px;background:#2a2a33;border-radius:6px;overflow:hidden;margin:8px 0 4px}.bar{height:6px;background:var(--accent);width:0}
+ a.save{display:inline-block;background:var(--ok);color:#00230d;padding:9px 14px;border-radius:11px;text-decoration:none;font-weight:700}
+ h2{font-size:15px;color:var(--accent2);margin:20px 0 6px}
+ small{color:#8a8a96}
+ .sep{text-align:center;color:#6a6a76;font-size:13px;margin:14px 0 4px}
+</style></head><body>
+<header><b>MK<span>Downloader</span></b></header>
+<div class="wrap">
  <div id="lock" class="card">
-   <div>Code PIN</div>
-   <input id="pin" inputmode="numeric" placeholder="PIN affiché sur le téléphone">
-   <button onclick="savePin()">Valider</button>
+   <div style="margin-bottom:6px">Code PIN (affiché sur le téléphone)</div>
+   <input id="pinIn" inputmode="numeric" placeholder="PIN">
+   <button style="width:100%;margin-top:8px" onclick="savePin()">Déverrouiller</button>
  </div>
  <div id="app" style="display:none">
-   <input id="url" placeholder="Colle un lien vidéo (YouTube, TikTok...)">
-   <div class="row">
-     <select id="q">
-       <option value="mp4">MP4 — meilleure qualité</option>
-       <option value="1080p">MP4 1080p</option>
-       <option value="720p">MP4 720p</option>
-       <option value="max">Qualité max</option>
-       <option value="audio">Audio MP3</option>
-     </select>
-     <button style="max-width:140px" onclick="add()">Télécharger</button>
+   <select id="q">
+     <option value="mp4">MP4 — meilleure qualité</option>
+     <option value="1080p">MP4 1080p</option>
+     <option value="720p">MP4 720p</option>
+     <option value="max">Qualité max</option>
+     <option value="audio">Audio MP3</option>
+   </select>
+   <div class="searchrow">
+     <input id="q1" placeholder="Rechercher une vidéo YouTube…" onkeydown="if(event.key=='Enter')doSearch()">
+     <button onclick="doSearch()">Rechercher</button>
    </div>
-   <div id="jobs"></div>
-   <h1 style="font-size:16px">Fichiers prêts</h1>
-   <div id="files"></div>
+   <div id="results"></div>
+   <div class="sep">— ou —</div>
+   <div class="searchrow">
+     <input id="url" placeholder="Colle un lien vidéo…">
+     <button onclick="addLink()">Ajouter</button>
+   </div>
+   <div id="dl"></div>
  </div>
- <p><small>Servi par ton téléphone Android sur le Wi-Fi.</small></p>
 </div>
 <script>
- function pin(){return localStorage.getItem('mkpin')||''}
- function savePin(){localStorage.setItem('mkpin',document.getElementById('pin').value.trim());show();tick()}
- function show(){var ok=pin().length>0;document.getElementById('lock').style.display=ok?'none':'block';document.getElementById('app').style.display=ok?'block':'none'}
- function add(){var u=document.getElementById('url').value.trim();if(!u)return;
-   fetch('/api/add',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-   body:'pin='+encodeURIComponent(pin())+'&url='+encodeURIComponent(u)+'&q='+document.getElementById('q').value})
-   .then(function(){document.getElementById('url').value='';tick()})}
- function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
- function tick(){fetch('/api/status?pin='+encodeURIComponent(pin())).then(function(r){return r.json()}).then(function(d){
-   var j='';(d.jobs||[]).forEach(function(x){var p=x.percent>=0?x.percent:0;
-     j+='<div class="card">'+esc(x.title)+'<div class="prog"><div class="bar" style="width:'+p+'%"></div></div><small>'+x.status+' '+(x.percent>=0?x.percent+'%':'')+'</small></div>'});
-   document.getElementById('jobs').innerHTML=j;
-   var f='';(d.files||[]).forEach(function(x){
-     f+='<div class="card">'+esc(x.title)+'<br><a class="dl" href="/dl/'+encodeURIComponent(x.id)+'?pin='+encodeURIComponent(pin())+'">Enregistrer</a></div>'});
-   document.getElementById('files').innerHTML=f;
- }).catch(function(){})}
+ var R=[];
+ function P(){return encodeURIComponent(localStorage.getItem('mkpin')||'')}
+ function has(){return (localStorage.getItem('mkpin')||'').length>0}
+ function el(i){return document.getElementById(i)}
+ function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+ function qual(){return el('q').value}
+ function savePin(){localStorage.setItem('mkpin',el('pinIn').value.trim());show();tick()}
+ function show(){el('lock').style.display=has()?'none':'block';el('app').style.display=has()?'block':'none'}
+ function j(r){return r.json()}
+ function doSearch(){var q=el('q1').value.trim();if(!q)return;el('results').innerHTML='<small>Recherche…</small>';
+   fetch('/api/search?pin='+P()+'&q='+encodeURIComponent(q)).then(j).then(function(d){
+     R=d.results||[];if(!R.length){el('results').innerHTML='<small>Aucun résultat.</small>';return}
+     var h='';for(var i=0;i<R.length;i++){var x=R[i];
+       h+='<div class="card res"><img src="'+esc(x.thumb)+'" loading="lazy"><div><div class="t">'+esc(x.title)+'</div><small>'+esc(x.by)+'</small><br><button onclick="addIdx('+i+')">Télécharger</button></div></div>'}
+     el('results').innerHTML=h}).catch(function(){el('results').innerHTML='<small>Erreur.</small>'})}
+ function addIdx(i){addUrl(R[i].url)}
+ function addLink(){var u=el('url').value.trim();if(u){addUrl(u);el('url').value=''}}
+ function addUrl(u){fetch('/api/add',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+   body:'pin='+P()+'&url='+encodeURIComponent(u)+'&q='+qual()}).then(function(){tick()})}
+ function tick(){if(!has())return;fetch('/api/status?pin='+P()).then(j).then(function(d){
+   var h='';var jobs=d.jobs||[],files=d.files||[];
+   if(jobs.length||files.length)h+='<h2>Téléchargements</h2>';
+   jobs.forEach(function(x){var p=x.percent>=0?x.percent:0;
+     h+='<div class="card">'+esc(x.title)+'<div class="prog"><div class="bar" style="width:'+p+'%"></div></div><small>'+esc(x.status)+' '+(x.percent>=0?x.percent+'%':'')+'</small></div>'});
+   files.forEach(function(x){
+     h+='<div class="card">'+esc(x.title)+'<br><a class="save" href="/dl/'+encodeURIComponent(x.id)+'?pin='+P()+'">⬇ Enregistrer</a></div>'});
+   el('dl').innerHTML=h}).catch(function(){})}
  show();tick();setInterval(tick,2000);
 </script></body></html>
 """.trimIndent()
