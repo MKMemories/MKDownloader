@@ -224,6 +224,17 @@
     <string name="set_update_app">⬆️ Mettre à jour l\'application</string>
     <string name="set_update_engine">🔄 Mettre à jour le moteur (yt-dlp)</string>
     <string name="set_logs">🐞 Exporter le journal</string>
+    <string name="set_relay">📡 MK Relais (partager avec des iPhones)</string>
+    <string name="relay_title">MK Relais</string>
+    <string name="relay_desc">Ton téléphone devient un serveur de téléchargement pour les autres appareils du MÊME Wi-Fi (iPhones, iPad…). Ils scannent le QR code, saisissent le PIN, collent un lien → ton téléphone télécharge, puis ils enregistrent le fichier.</string>
+    <string name="relay_on">▶ Activer le relais</string>
+    <string name="relay_off">■ Désactiver le relais</string>
+    <string name="relay_status">Ouvre cette adresse sur l\'iPhone :\n%1$s\n\nPIN : %2$s</string>
+    <string name="relay_no_wifi">Connecte le téléphone à un réseau Wi-Fi.</string>
+    <string name="relay_stopped">Relais désactivé.</string>
+    <string name="relay_notif_title">MK Relais actif</string>
+    <string name="relay_notif_wifi">Connecte-toi à un Wi-Fi</string>
+    <string name="relay_notif_channel">MK Relais</string>
     <string name="acc_youtube">▶ YouTube</string>
     <string name="acc_desc">Connectez-vous à %1$s pour les vidéos qui l\'exigent (âge, membres, accès restreint). Importez un fichier cookies.txt exporté depuis votre navigateur (extension « Get cookies.txt LOCALLY »).</string>
     <string name="acc_connected">✅ %1$s connecté. Les vidéos nécessitant une connexion utiliseront ce compte. Vous pouvez ré-importer (rafraîchir) ou vous déconnecter.</string>

@@ -66,6 +66,17 @@
             android:theme="@style/Theme.MKDownloader" />
 
         <activity
+            android:name=".RelayActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:theme="@style/Theme.MKDownloader" />
+
+        <service
+            android:name=".RelayService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <activity
             android:name=".MovieDetailActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"

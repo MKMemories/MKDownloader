@@ -11,8 +11,8 @@ android {
         applicationId = "com.mkmemories.mkdownloader"
         minSdk = 24
         targetSdk = 35
-        versionCode = 95
-        versionName = "5.80"
+        versionCode = 96
+        versionName = "5.81"
         ndk {
             // youtubedl-android ne publie des binaires (Python/ffmpeg) que pour ARM.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -78,6 +78,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("io.coil-kt:coil:2.6.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    // Génération de QR code (MK Relais : partage avec les iPhones du Wi-Fi).
+    implementation("com.google.zxing:core:3.5.3")
 
     // Lecteur vidéo premium (streaming direct des flux extraits par yt-dlp).
     implementation("androidx.media3:media3-exoplayer:1.4.1")

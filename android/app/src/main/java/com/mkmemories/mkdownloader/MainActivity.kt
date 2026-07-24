@@ -834,6 +834,7 @@ class MainActivity : AppCompatActivity() {
         actions += getString(R.string.set_update_app) to {
             toast(getString(R.string.upd_checking)); checkAppUpdate(force = true)
         }
+        actions += getString(R.string.set_relay) to { startActivity(Intent(this, RelayActivity::class.java)) }
         actions += getString(R.string.set_update_engine) to { updateEngine() }
         actions += getString(R.string.set_logs) to {
             runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) }
