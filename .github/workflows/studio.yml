@@ -1,0 +1,64 @@
+name: Build MK Studio APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "studio/**"
+      - ".github/workflows/studio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.9"
+
+      # Moteur natif : stable-diffusion.cpp épinglé à un commit précis (+ ggml).
+      - name: Clone stable-diffusion.cpp (épinglé)
+        run: |
+          git clone https://github.com/leejet/stable-diffusion.cpp studio/app/src/main/cpp/stable-diffusion.cpp
+          cd studio/app/src/main/cpp/stable-diffusion.cpp
+          git checkout 97d2990807fe6d558e395f8764198d7c7e7b411c
+          git submodule update --init ggml
+
+      - name: Build release APK
+        run: gradle -p studio :app:assembleRelease
+
+      - name: Rename APK
+        run: cp studio/app/build/outputs/apk/release/app-release.apk MKStudio.apk
+
+      - name: Génère studio-update.json
+        run: |
+          VC=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' studio/app/build.gradle.kts | head -1)
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' studio/app/build.gradle.kts | head -1)
+          printf '{"versionCode":%s,"versionName":"%s"}\n' "$VC" "$VN" > studio-update.json
+          cat studio-update.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mkstudio-apk
+          path: MKStudio.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: studio-latest
+          name: "MK Studio — dernier APK"
+          body: "MK Studio : génération d'images IA 100% sur l'appareil (Stable Diffusion embarqué, aucun compte, aucune connexion cloud). Téléphone récent avec 6 Go de RAM et plus recommandé. Installez l'APK (autorisez les sources inconnues si demandé) ; le modèle (~1 Go) se télécharge dans l'app au premier lancement."
+          files: |
+            MKStudio.apk
+            studio-update.json

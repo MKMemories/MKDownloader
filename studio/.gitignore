@@ -1,0 +1,6 @@
+# Moteur natif : cloné par la CI (voir .github/workflows/studio.yml), pas versionné ici.
+app/src/main/cpp/stable-diffusion.cpp/
+build/
+app/build/
+.gradle/
+local.properties

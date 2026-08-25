@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MK Studio</string>
+    <string name="tab_create">Créer</string>
+    <string name="tab_edit">Retoucher</string>
+    <string name="tab_gallery">Galerie</string>
+
+    <string name="models_title">Modèle d\'IA (une seule fois)</string>
+    <string name="models_hint">Le modèle est téléchargé une fois puis tout se passe SUR ton téléphone : gratuit, privé, sans compte. Wi-Fi recommandé.</string>
+    <string name="model_download">Télécharger</string>
+    <string name="model_installed">✔ Installé</string>
+    <string name="model_delete">Supprimer</string>
+
+    <string name="prompt_hint">Décris l\'image (anglais conseillé)… ex : a cat astronaut on the moon</string>
+    <string name="style_title">Style</string>
+    <string name="format_title">Format</string>
+    <string name="quality_title">Qualité</string>
+    <string name="generate">✨ Générer l\'image</string>
+    <string name="time_hint">⏱ Génération sur l\'appareil : de 1 à plusieurs minutes selon le téléphone.</string>
+
+    <string name="edit_pick">📷 Choisir une photo</string>
+    <string name="edit_prompt_hint">Décris la transformation… ex : turn into an oil painting</string>
+    <string name="strength_title">Intensité de la retouche</string>
+    <string name="strength_light">Légère</string>
+    <string name="strength_medium">Moyenne</string>
+    <string name="strength_strong">Forte</string>
+    <string name="edit_generate">🪄 Retoucher</string>
+    <string name="edit_need_photo">Choisis d\'abord une photo.</string>
+
+    <string name="need_model">Télécharge d\'abord le modèle (carte en haut de l\'onglet Créer).</string>
+    <string name="need_prompt">Écris d\'abord une description.</string>
+    <string name="busy">Une opération est déjà en cours.</string>
+    <string name="cancel">Annuler</string>
+    <string name="share">Partager</string>
+    <string name="saved_to_gallery">Image enregistrée dans la galerie ✔</string>
+    <string name="gallery_empty">Aucune création pour l\'instant. Tes images générées apparaîtront ici.</string>
+
+    <string name="st_downloading">Téléchargement : %1$s</string>
+    <string name="st_dl_failed">Échec du téléchargement (%1$s). Réessaie (reprise automatique).</string>
+    <string name="st_loading_model">Chargement du modèle… (peut prendre 30 s)</string>
+    <string name="st_generating">Génération… étape %1$d/%2$d</string>
+    <string name="st_gen_failed">La génération a échoué ou a été annulée.</string>
+    <string name="st_model_load_failed">Impossible de charger le modèle (fichier corrompu ? mémoire insuffisante ?).</string>
+    <string name="st_working">Travail en cours…</string>
+    <string name="st_notif_channel">MK Studio — progression</string>
+</resources>
