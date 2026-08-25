@@ -140,7 +140,7 @@ Java_com_mkmemories_mkstudio_NativeSD_unload(JNIEnv*, jobject) {
     if (g_ctx) {
         free_sd_ctx(g_ctx);
         g_ctx = nullptr;
-        g_loaded_path.clear();
+        g_loaded_key.clear();
     }
 }
 
