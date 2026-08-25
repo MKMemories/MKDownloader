@@ -15,6 +15,10 @@
     <string name="style_title">Style</string>
     <string name="format_title">Format</string>
     <string name="quality_title">Qualité</string>
+    <string name="engine_title">Moteur</string>
+    <string name="mode_turbo">⚡ Turbo (recommandé)</string>
+    <string name="mode_precise">🎯 Précis (lent)</string>
+    <string name="need_turbo">Télécharge d\'abord l\'accélérateur ⚡ Turbo (70 Mo) dans la carte « Modèle d\'IA ».</string>
     <string name="generate">✨ Générer l\'image</string>
     <string name="time_hint">⏱ Génération sur l\'appareil : de 1 à plusieurs minutes selon le téléphone.</string>
 

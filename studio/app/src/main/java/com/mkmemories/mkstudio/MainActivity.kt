@@ -45,7 +45,12 @@ class MainActivity : AppCompatActivity() {
         Triple("Paysage", 768, 512),
         Triple("Éclair (rapide)", 384, 384),
     )
-    private val qualities = listOf("Rapide" to 12, "Standard" to 20, "Fin" to 28)
+    // Étapes par qualité : [turbo LCM, précis]
+    private val qualities = listOf(
+        Triple("Rapide", 4, 12),
+        Triple("Standard", 6, 20),
+        Triple("Fin", 10, 28),
+    )
     private val strengths = listOf("Légère" to 0.35f, "Moyenne" to 0.55f, "Forte" to 0.75f)
 
     private val negativeDefault =
@@ -72,6 +77,7 @@ class MainActivity : AppCompatActivity() {
 
         buildChips(ui.styleChips, styles.map { it.first })
         buildChips(ui.formatChips, formats.map { it.first })
+        buildChips(ui.modeChips, listOf(getString(R.string.mode_turbo), getString(R.string.mode_precise)))
         buildChips(ui.qualityChips, qualities.map { it.first }, checkedIndex = 1)
         buildChips(ui.strengthChips, strengths.map { it.first }, checkedIndex = 1)
 
@@ -112,8 +118,11 @@ class MainActivity : AppCompatActivity() {
         if (prompt.isEmpty()) { toast(getString(R.string.need_prompt)); return }
         val style = styles[checkedIndex(ui.styleChips)].second
         val (_, w, h) = formats[checkedIndex(ui.formatChips)]
-        val steps = qualities[checkedIndex(ui.qualityChips)].second
-        Studio.generate(this, prompt + style, negativeDefault, w, h, steps)
+        val turbo = checkedIndex(ui.modeChips) == 0
+        if (turbo && !Models.turboReady(this)) { toast(getString(R.string.need_turbo)); return }
+        val q = qualities[checkedIndex(ui.qualityChips)]
+        val steps = if (turbo) q.second else q.third
+        Studio.generate(this, prompt + style, negativeDefault, w, h, steps, turbo = turbo)
         render()
     }
 
@@ -125,7 +134,11 @@ class MainActivity : AppCompatActivity() {
         if (prompt.isEmpty()) { toast(getString(R.string.need_prompt)); return }
         val strength = strengths[checkedIndex(ui.strengthChips)].second
         // La retouche garde un format carré 512 (bon compromis vitesse/qualité).
-        Studio.generate(this, prompt, negativeDefault, 512, 512, 20, init = src, strength = strength)
+        val turbo = Models.turboReady(this)
+        Studio.generate(
+            this, prompt, negativeDefault, 512, 512, if (turbo) 6 else 20,
+            init = src, strength = strength, turbo = turbo,
+        )
         render()
     }
 
@@ -181,9 +194,12 @@ class MainActivity : AppCompatActivity() {
         val box = ui.modelsBox
         box.removeAllViews()
         var anyInstalled = false
-        Models.CATALOG.forEach { model ->
+        // Modèles de base + accélérateur ⚡ Turbo (proposé dès qu'une base est là).
+        val baseInstalled = Models.CATALOG.any { Models.isInstalled(this, it) }
+        val rows = if (baseInstalled) Models.CATALOG + Models.LCM_LORA else Models.CATALOG
+        rows.forEach { model ->
             val installed = Models.isInstalled(this, model)
-            if (installed) anyInstalled = true
+            if (installed && model.id != Models.LCM_LORA.id) anyInstalled = true
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
@@ -208,9 +224,10 @@ class MainActivity : AppCompatActivity() {
             }
             box.addView(row)
         }
-        // La carte reste visible tant qu'aucun modèle n'est prêt ; ensuite elle
-        // se replie (mais reste accessible pour la version haute fidélité).
-        ui.modelCard.isVisible = !anyInstalled || Models.CATALOG.any { !Models.isInstalled(this, it) }
+        // La carte reste visible tant qu'il manque un modèle de base OU l'accélérateur.
+        ui.modelCard.isVisible = !anyInstalled ||
+            Models.CATALOG.any { !Models.isInstalled(this, it) } ||
+            !Models.turboReady(this)
     }
 
     // ---------- Galerie ----------

@@ -13,6 +13,7 @@ data class SdModel(
     val fileName: String,
     val approxMb: Int,
     val urls: List<String>,
+    val minBytes: Long = 200L * 1024 * 1024,   // taille minimale d'un fichier valide
 )
 
 object Models {
@@ -20,7 +21,7 @@ object Models {
     val CATALOG = listOf(
         SdModel(
             id = "sd15_q4",
-            label = "Standard — SD 1.5 (≈ 1,0 Go)",
+            label = "Rapide — SD 1.5 Q4 (≈ 1,0 Go) · recommandé",
             fileName = "sd15_q4_0.gguf",
             approxMb = 1030,
             urls = listOf(
@@ -30,7 +31,7 @@ object Models {
         ),
         SdModel(
             id = "sd15_q8",
-            label = "Haute fidélité — SD 1.5 Q8 (≈ 1,8 Go)",
+            label = "Haute fidélité — SD 1.5 Q8 (≈ 1,8 Go) · plus lent",
             fileName = "sd15_q8_0.gguf",
             approxMb = 1830,
             urls = listOf(
@@ -40,6 +41,18 @@ object Models {
         ),
     )
 
+    /** Accélérateur ⚡ LCM : génère en 4-6 étapes au lieu de 20 (~4× plus vite). */
+    val LCM_LORA = SdModel(
+        id = "lcm_lora",
+        label = "⚡ Accélérateur Turbo LCM (≈ 70 Mo)",
+        fileName = "lcm_lora_sd15.safetensors",
+        approxMb = 70,
+        urls = listOf(
+            "https://huggingface.co/latent-consistency/lcm-lora-sdv1-5/resolve/main/pytorch_lora_weights.safetensors",
+        ),
+        minBytes = 30L * 1024 * 1024,
+    )
+
     fun dir(context: Context): File =
         File(context.getExternalFilesDir(null), "models").apply { mkdirs() }
 
@@ -47,10 +60,12 @@ object Models {
 
     fun isInstalled(context: Context, model: SdModel): Boolean {
         val f = fileOf(context, model)
-        // Un GGUF valide fait plusieurs centaines de Mo : élimine les restes vides.
-        return f.exists() && f.length() > 200L * 1024 * 1024
+        // Élimine les fichiers vides/incomplets restés d'un téléchargement raté.
+        return f.exists() && f.length() > model.minBytes
     }
 
-    /** Le modèle prêt à l'emploi (préférence au plus léger installé). */
+    /** Le modèle prêt à l'emploi (préférence au plus rapide installé). */
     fun installed(context: Context): SdModel? = CATALOG.firstOrNull { isInstalled(context, it) }
+
+    fun turboReady(context: Context): Boolean = isInstalled(context, LCM_LORA)
 }

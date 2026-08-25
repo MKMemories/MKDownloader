@@ -75,7 +75,7 @@ object Studio {
                         update(Phase.DOWNLOADING, pct, app.getString(R.string.st_downloading, model.label))
                         !cancelDownload
                     }
-                    if (!cancelDownload && part.length() > 200L * 1024 * 1024) {
+                    if (!cancelDownload && part.length() > model.minBytes) {
                         part.renameTo(dest)
                         ok = true
                         break
@@ -138,6 +138,7 @@ object Studio {
 
     /**
      * Lance une génération. [init] non nul = retouche de cette photo.
+     * [turbo] : utilise l'accélérateur LCM (4-6 étapes, ~4× plus rapide).
      * Le résultat est sauvegardé automatiquement dans la galerie (Pictures/MK Studio).
      */
     fun generate(
@@ -149,16 +150,18 @@ object Studio {
         steps: Int,
         init: Bitmap? = null,
         strength: Float = 0.55f,
+        turbo: Boolean = false,
     ) {
         if (busy) return
         val app = context.applicationContext
         val model = Models.installed(app) ?: return
+        val useTurbo = turbo && Models.turboReady(app)
         lastError = null
         StudioService.start(app)
         update(Phase.LOADING, -1, app.getString(R.string.st_loading_model))
         scope.launch {
             try {
-                val threads = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(2, 6)
+                val threads = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(3, 6)
                 if (!NativeSD.loadModel(Models.fileOf(app, model).absolutePath, threads)) {
                     throw IllegalStateException(app.getString(R.string.st_model_load_failed))
                 }
@@ -169,8 +172,12 @@ object Studio {
                 update(Phase.GENERATING, 0, app.getString(R.string.st_generating, 0, steps))
                 val initBytes = init?.let { toRgbBytes(it, width, height) }
                 val seed = abs(Random.nextLong() % 2_000_000_000L)
+                // LCM : peu d'étapes et guidance très basse (1.5), sinon CFG 7.
+                val cfg = if (useTurbo) 1.5f else 7.0f
+                val loraPath = if (useTurbo) Models.fileOf(app, Models.LCM_LORA).absolutePath else null
                 val rgb = NativeSD.generate(
-                    prompt, negative, width, height, steps, 7.0f, seed, initBytes, strength,
+                    prompt, negative, width, height, steps, cfg, seed, initBytes, strength,
+                    loraPath, 1.0f, useTurbo,
                 )
                 if (rgb != null) {
                     val bmp = fromRgbBytes(rgb, width, height)

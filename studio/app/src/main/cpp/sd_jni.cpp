@@ -67,6 +67,10 @@ Java_com_mkmemories_mkstudio_NativeSD_loadModel(JNIEnv* env, jobject, jstring jp
     sd_ctx_params_init(&p);
     p.model_path = path;
     p.n_threads = threads;
+    // Optimisations CPU : flash attention (mémoire/vitesse) + convolution
+    // directe pour le VAE (décodage final plus rapide).
+    p.diffusion_flash_attn = true;
+    p.vae_conv_direct = true;
     LOGI("Chargement du modèle: %s (threads=%d)", path, threads);
     g_ctx = new_sd_ctx(&p);
     if (g_ctx) g_loaded_path = path;
@@ -96,18 +100,27 @@ Java_com_mkmemories_mkstudio_NativeSD_cancel(JNIEnv*, jobject) {
 
 // Génère une image. init == null → texte seul ; sinon retouche (img2img) :
 // init est un tableau RGB (w*h*3) DÉJÀ redimensionné aux dimensions demandées.
+// jlora facultatif (accélérateur LCM…) ; lcm = échantillonneur LCM.
 // Renvoie un tableau RGB (width*height*3) ou null en cas d'échec/annulation.
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_mkmemories_mkstudio_NativeSD_generate(JNIEnv* env, jobject,
                                                jstring jprompt, jstring jnegative,
                                                jint width, jint height, jint steps,
                                                jfloat cfg, jlong seed,
-                                               jbyteArray jinit, jfloat strength) {
+                                               jbyteArray jinit, jfloat strength,
+                                               jstring jlora, jfloat lora_mult,
+                                               jboolean lcm) {
     if (!g_ctx) return nullptr;
     t_env = env;
 
     const char* prompt = env->GetStringUTFChars(jprompt, nullptr);
     const char* negative = env->GetStringUTFChars(jnegative, nullptr);
+    std::string lora_path;
+    if (jlora) {
+        const char* lp = env->GetStringUTFChars(jlora, nullptr);
+        lora_path = lp;
+        env->ReleaseStringUTFChars(jlora, lp);
+    }
 
     sd_img_gen_params_t g;
     sd_img_gen_params_init(&g);
@@ -120,6 +133,18 @@ Java_com_mkmemories_mkstudio_NativeSD_generate(JNIEnv* env, jobject,
     g.batch_count = 1;
     g.sample_params.sample_steps = steps;
     g.sample_params.guidance.txt_cfg = cfg;
+
+    sd_lora_t lora{};
+    if (!lora_path.empty()) {
+        lora.is_high_noise = false;
+        lora.multiplier = lora_mult;
+        lora.path = lora_path.c_str();
+        g.loras = &lora;
+        g.lora_count = 1;
+    }
+    if (lcm) {
+        g.sample_params.sample_method = LCM_SAMPLE_METHOD;
+    }
 
     jbyte* init_bytes = nullptr;
     if (jinit) {

@@ -31,8 +31,10 @@ object NativeSD {
 
     /**
      * Génère une image (bloquant, plusieurs minutes possibles).
-     * @param init  null = texte→image ; sinon pixels RGB (width*height*3) de la
-     *              photo de départ, déjà redimensionnée — retouche (img2img).
+     * @param init     null = texte→image ; sinon pixels RGB (width*height*3) de la
+     *                 photo de départ, déjà redimensionnée — retouche (img2img).
+     * @param loraPath LoRA optionnel (ex : accélérateur LCM) ; null = aucun.
+     * @param useLcm   true = échantillonneur LCM (4-6 étapes, avec le LoRA LCM).
      * @return pixels RGB (width*height*3) ou null (échec/annulation).
      */
     external fun generate(
@@ -45,5 +47,8 @@ object NativeSD {
         seed: Long,
         init: ByteArray?,
         strength: Float,
+        loraPath: String?,
+        loraMultiplier: Float,
+        useLcm: Boolean,
     ): ByteArray?
 }
