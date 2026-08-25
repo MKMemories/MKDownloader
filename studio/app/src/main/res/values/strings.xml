@@ -21,7 +21,7 @@
     <string name="mode_cloud">☁ Qualité max</string>
     <string name="cloud_button">☁ Clé qualité max</string>
     <string name="cloud_setup_title">☁ Qualité max (cloud Google)</string>
-    <string name="cloud_setup_msg">Images réalistes état de l\'art en ~10 s via l\'API Google (modèle image Gemini).\n\n1. Va sur aistudio.google.com/apikey (compte Google, gratuit)\n2. « Create API key » → copie la clé (AIza…)\n3. Colle-la ci-dessous\n\nÀ savoir : quota gratuit limité par jour ; les prompts/photos partent chez Google (contrairement aux modes locaux, 100 % privés). La clé reste stockée sur ton téléphone.</string>
+    <string name="cloud_setup_msg">SANS clé : le mode ☁ utilise déjà un service communautaire gratuit (FLUX) pour créer des images.\n\nAVEC une clé Google (facultative), tu ajoutes la RETOUCHE de photos (Gemini, la meilleure du marché) :\n1. aistudio.google.com/apikey (compte Google)\n2. « Create API key » → copie la clé (AIza…)\n3. Colle-la ci-dessous\n\nÀ savoir : quotas selon le service ; en mode ☁ les prompts/photos partent sur Internet (contrairement aux modes locaux, 100 % privés). La clé reste stockée sur ton téléphone.</string>
     <string name="cloud_key_hint">Colle ta clé API (AIza…)</string>
     <string name="cloud_get_key">Obtenir une clé</string>
     <string name="cloud_save">Enregistrer</string>

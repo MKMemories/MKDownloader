@@ -125,9 +125,9 @@ class MainActivity : AppCompatActivity() {
         val style = styles[checkedIndex(ui.styleChips)].second
         val mode = checkedIndex(ui.modeChips)
 
-        // ☁ Qualité max : API Google avec la clé de l'utilisateur.
+        // ☁ Qualité max : Gemini avec la clé de l'utilisateur, sinon service
+        // gratuit sans clé (FLUX) — marche dans tous les cas.
         if (mode == 2) {
-            if (!CloudEngine.hasKey(this)) { showCloudSetup(); return }
             val aspect = listOf("1:1", "3:4", "4:3", "1:1")[checkedIndex(ui.formatChips)]
             Studio.generate(this, prompt + style, "", 0, 0, 0, cloud = true, aspect = aspect)
             render()
