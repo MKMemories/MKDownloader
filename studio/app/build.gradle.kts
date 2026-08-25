@@ -15,8 +15,8 @@ android {
         // téléphone récent (6 Go de RAM et plus), tous sous Android 10+.
         minSdk = 29
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
         ndk {
             // Moteur 64 bits uniquement.
             abiFilters += listOf("arm64-v8a")

@@ -76,11 +76,12 @@ object Studio {
             val part = File(dest.absolutePath + ".part")
             var ok = false
             var error: String? = null
-            // Sources : URLs fixes + fichiers résolus à l'exécution via l'API HF.
-            val candidates = model.urls.toMutableList()
-            model.repos.forEach { repo ->
-                resolveGgufUrl(repo, model.filePattern)?.let { candidates += it }
-            }
+            // Sources : URLs fixes + fichiers résolus via l'API HF, ordonnés par
+            // préférence de quantification (tous dépôts confondus).
+            val resolved = model.repos.mapNotNull { resolveGgufUrl(it) }
+                .sortedWith(compareBy({ it.pref }, { it.sizeMb }))
+                .map { it.url }
+            val candidates = model.urls + resolved
             if (candidates.isEmpty()) error = "aucune source trouvée"
             for (url in candidates) {
                 try {
@@ -122,30 +123,49 @@ object Studio {
         NativeSD.cancel()
     }
 
+    /** URL résolue + rang de préférence (plus petit = meilleur pour nous). */
+    private data class ResolvedGguf(val url: String, val pref: Int, val sizeMb: Long)
+
+    // Ordre de préférence CPU : q4_0 (accéléré par REPACK) puis k-quants, etc.
+    private val QUANT_PREFS = listOf("q4_0", "q4_k", "q5_k", "q5_0", "q5_1", "q8_0", "f16")
+
+    // Bannies : quantifications 2-3 bits et i-quants → qualité massacrée et
+    // décodage lent sur CPU (cause des « résultats trop moches » v1.4 : iq2_xs).
+    private val QUANT_BAD = Regex("(?i)iq[0-9]|q2_|q3_|[_-]q[23][._-]")
+
     /**
-     * Trouve l'URL du fichier voulu dans un dépôt HuggingFace (API /tree) : le
-     * nom exact n'est pas codé en dur — robuste aux renommages.
+     * Trouve le meilleur fichier .gguf d'un dépôt HuggingFace (API /tree), par
+     * ordre de préférence de quantification — jamais par « le plus petit ».
      */
-    private fun resolveGgufUrl(repo: String, pattern: String): String? = runCatching {
+    private fun resolveGgufUrl(repo: String): ResolvedGguf? = runCatching {
         val conn = URL("https://huggingface.co/api/models/$repo/tree/main")
             .openConnection() as HttpURLConnection
         conn.connectTimeout = 15000
         conn.readTimeout = 20000
         val body = conn.inputStream.use { it.readBytes().decodeToString() }
         val arr = org.json.JSONArray(body)
-        val files = mutableListOf<Pair<String, Long>>()
+        val ggufs = mutableListOf<Pair<String, Long>>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            files += o.optString("path") to o.optLong("size", Long.MAX_VALUE)
+            val path = o.optString("path")
+            if (path.endsWith(".gguf", true) && !QUANT_BAD.containsMatchIn(path)) {
+                ggufs += path to o.optLong("size", Long.MAX_VALUE)
+            }
         }
-        val rx = Regex(pattern)
-        val match = files.filter { rx.containsMatchIn(it.first) }.minByOrNull { it.second }
-        // Repli : n'importe quel .gguf, le plus petit (quantification la plus légère).
-            ?: files.filter { it.first.endsWith(".gguf", true) }.minByOrNull { it.second }
-        match?.let {
-            Logs.add("résolu $repo → ${it.first} (${it.second / (1024 * 1024)} Mo)")
-            "https://huggingface.co/$repo/resolve/main/${it.first}"
+        var best: ResolvedGguf? = null
+        for ((rank, q) in QUANT_PREFS.withIndex()) {
+            val m = ggufs.filter { it.first.contains(q, ignoreCase = true) }
+                .minByOrNull { it.second }
+            if (m != null) {
+                best = ResolvedGguf(
+                    "https://huggingface.co/$repo/resolve/main/${m.first}", rank, m.second / (1024 * 1024),
+                )
+                Logs.add("résolu $repo → ${m.first} (${best.sizeMb} Mo, préf. $q)")
+                break
+            }
         }
+        if (best == null) Logs.add("résolution $repo: aucun fichier de qualité acceptable")
+        best
     }.onFailure { Logs.add("résolution $repo impossible: ${it.message}") }.getOrNull()
 
     private fun fetchResumable(url: String, part: File, progress: (Long, Long) -> Boolean) {

@@ -71,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         ui = ActivityMainBinding.inflate(layoutInflater)
         setContentView(ui.root)
         Logs.attach(this)   // journal persisté + capture des crashs
+        Models.cleanupObsolete(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)

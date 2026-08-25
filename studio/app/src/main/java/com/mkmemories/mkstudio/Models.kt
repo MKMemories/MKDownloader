@@ -29,9 +29,11 @@ object Models {
         // appliquer (le gros frein mesuré), et esthétique Dreamshaper.
         SdModel(
             id = "ds8_lcm",
-            label = "⚡ Dreamshaper 8 + Turbo intégré (≈ 1,1 Go) · LE plus rapide",
-            fileName = "ds8_lcm_q4_0.gguf",
-            approxMb = 1100,
+            label = "⚡ Dreamshaper 8 + Turbo intégré (≈ 1,3 Go) · LE plus rapide",
+            // v2 : la v1.4 avait téléchargé une quantification 2 bits (résultats
+            // moches) sous l'ancien nom — nouveau nom ⇒ re-téléchargement propre.
+            fileName = "ds8_lcm_v2.gguf",
+            approxMb = 1300,
             urls = emptyList(),   // fichier résolu à l'exécution via l'API HF
             lcmBuiltIn = true,
             repos = listOf(
@@ -103,4 +105,12 @@ object Models {
 
     fun taesdPath(context: Context): String? =
         if (isInstalled(context, TAESD)) fileOf(context, TAESD).absolutePath else null
+
+    /** Purge les fichiers de versions défectueuses (libère l'espace). */
+    fun cleanupObsolete(context: Context) {
+        listOf("ds8_lcm_q4_0.gguf").forEach { name ->
+            val f = File(dir(context), name)
+            if (f.exists() && f.delete()) Logs.add("fichier obsolète supprimé: $name")
+        }
+    }
 }
