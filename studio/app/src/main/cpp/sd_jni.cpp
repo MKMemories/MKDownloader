@@ -6,6 +6,8 @@
 #include <android/log.h>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
+#include <mutex>
 #include <string>
 
 #include "stable-diffusion.h"
@@ -19,7 +21,20 @@ static jclass g_native_cls = nullptr;   // com.mkmemories.mkstudio.NativeSD (ref
 static jmethodID g_on_progress = nullptr;
 
 static sd_ctx_t* g_ctx = nullptr;
-static std::string g_loaded_path;
+static std::string g_loaded_key;   // model_path|taesd_path
+
+// Journal natif : tampon circulaire des messages du moteur (INFO et plus),
+// récupéré côté Kotlin pour le « Journal technique » de l'app.
+static std::mutex g_log_mutex;
+static std::deque<std::string> g_log_lines;
+
+static void push_log(const char* level, const char* text) {
+    std::string line = std::string("[") + level + "] " + (text ? text : "");
+    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+    std::lock_guard<std::mutex> lock(g_log_mutex);
+    g_log_lines.push_back(std::move(line));
+    while (g_log_lines.size() > 400) g_log_lines.pop_front();
+}
 
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
     g_vm = vm;
@@ -46,19 +61,49 @@ static void progress_cb(int step, int steps, float /*time*/, void*) {
 
 static void log_cb(enum sd_log_level_t level, const char* text, void*) {
     if (level >= SD_LOG_WARN) __android_log_print(ANDROID_LOG_WARN, TAG, "%s", text);
+    if (level >= SD_LOG_INFO) {
+        push_log(level == SD_LOG_INFO ? "info" : (level == SD_LOG_WARN ? "warn" : "erreur"), text);
+    }
+}
+
+// Récupère et vide le journal natif (une ligne par entrée).
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mkmemories_mkstudio_NativeSD_getLogs(JNIEnv* env, jobject) {
+    std::string joined;
+    {
+        std::lock_guard<std::mutex> lock(g_log_mutex);
+        for (auto& l : g_log_lines) { joined += l; joined += '\n'; }
+        g_log_lines.clear();
+    }
+    return env->NewStringUTF(joined.c_str());
+}
+
+// Capacités CPU détectées par ggml (NEON, DOTPROD, FP16…) — pour le journal.
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_mkmemories_mkstudio_NativeSD_systemInfo(JNIEnv* env, jobject) {
+    const char* info = sd_get_system_info();
+    return env->NewStringUTF(info ? info : "?");
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_mkmemories_mkstudio_NativeSD_loadModel(JNIEnv* env, jobject, jstring jpath, jint threads) {
+Java_com_mkmemories_mkstudio_NativeSD_loadModel(JNIEnv* env, jobject, jstring jpath, jint threads,
+                                                jstring jtaesd) {
     const char* path = env->GetStringUTFChars(jpath, nullptr);
-    if (g_ctx && g_loaded_path == path) {
+    std::string taesd;
+    if (jtaesd) {
+        const char* t = env->GetStringUTFChars(jtaesd, nullptr);
+        taesd = t;
+        env->ReleaseStringUTFChars(jtaesd, t);
+    }
+    std::string key = std::string(path) + "|" + taesd;
+    if (g_ctx && g_loaded_key == key) {
         env->ReleaseStringUTFChars(jpath, path);
         return JNI_TRUE;   // déjà chargé
     }
     if (g_ctx) {
         free_sd_ctx(g_ctx);
         g_ctx = nullptr;
-        g_loaded_path.clear();
+        g_loaded_key.clear();
     }
     sd_set_log_callback(log_cb, nullptr);
     sd_set_progress_callback(progress_cb, nullptr);
@@ -67,13 +112,19 @@ Java_com_mkmemories_mkstudio_NativeSD_loadModel(JNIEnv* env, jobject, jstring jp
     sd_ctx_params_init(&p);
     p.model_path = path;
     p.n_threads = threads;
-    // Optimisations CPU : flash attention (mémoire/vitesse) + convolution
-    // directe pour le VAE (décodage final plus rapide).
+    // TAESD : mini-décodeur (~10 Mo) qui remplace le VAE pour l'image finale
+    // → décodage en ~1 s au lieu de 10-30 s (légère perte de finesse).
+    if (!taesd.empty()) p.taesd_path = taesd.c_str();
+    // Optimisations CPU : flash attention (mémoire/vitesse) + convolution directe.
     p.diffusion_flash_attn = true;
     p.vae_conv_direct = true;
+    p.diffusion_conv_direct = true;
+    push_log("app", ("chargement du modèle: " + std::string(path) +
+                     " threads=" + std::to_string(threads) +
+                     (taesd.empty() ? "" : " taesd=oui")).c_str());
     LOGI("Chargement du modèle: %s (threads=%d)", path, threads);
     g_ctx = new_sd_ctx(&p);
-    if (g_ctx) g_loaded_path = path;
+    if (g_ctx) g_loaded_key = key;
     env->ReleaseStringUTFChars(jpath, path);
     LOGI("Chargement: %s", g_ctx ? "OK" : "ECHEC");
     return g_ctx ? JNI_TRUE : JNI_FALSE;

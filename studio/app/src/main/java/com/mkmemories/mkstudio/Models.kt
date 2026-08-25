@@ -68,4 +68,19 @@ object Models {
     fun installed(context: Context): SdModel? = CATALOG.firstOrNull { isInstalled(context, it) }
 
     fun turboReady(context: Context): Boolean = isInstalled(context, LCM_LORA)
+
+    /** Mini-décodeur TAESD : image finale décodée ~10× plus vite (~10 Mo). */
+    val TAESD = SdModel(
+        id = "taesd",
+        label = "🚀 Décodeur rapide TAESD (≈ 10 Mo)",
+        fileName = "taesd_sd15.safetensors",
+        approxMb = 10,
+        urls = listOf(
+            "https://huggingface.co/madebyollin/taesd/resolve/main/diffusion_pytorch_model.safetensors",
+        ),
+        minBytes = 2L * 1024 * 1024,
+    )
+
+    fun taesdPath(context: Context): String? =
+        if (isInstalled(context, TAESD)) fileOf(context, TAESD).absolutePath else null
 }

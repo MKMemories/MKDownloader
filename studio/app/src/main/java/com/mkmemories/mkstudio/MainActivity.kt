@@ -96,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         ui.editGenerateBtn.setOnClickListener { generateFromEdit() }
         ui.cancelBtn.setOnClickListener { Studio.cancelCurrent() }
         ui.shareBtn.setOnClickListener { shareResult() }
+        ui.logsBtn.setOnClickListener { showLogs() }
 
         ui.galleryList.layoutManager = GridLayoutManager(this, 2)
         ui.galleryList.adapter = galleryAdapter
@@ -164,16 +165,79 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, getString(R.string.share)))
     }
 
+    // ---------- Journal technique ----------
+
+    private fun deviceHeader(): String = buildString {
+        append("Appareil : ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+        append(" · Android ${android.os.Build.VERSION.RELEASE}")
+        append(" · ${Runtime.getRuntime().availableProcessors()} cœurs\n")
+        append("Moteur : ")
+        append(runCatching { NativeSD.systemInfo() }.getOrDefault("(non chargé)"))
+        append("\n————————————\n")
+    }
+
+    private fun showLogs() {
+        Logs.drainNative()
+        val text = deviceHeader() + Logs.dump()
+        val view = android.widget.TextView(this).apply {
+            setText(text)
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 11f
+            setTextColor(getColor(R.color.text))
+            setPadding(40, 20, 40, 20)
+            setTextIsSelectable(true)
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(view) }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.logs_title)
+            .setView(scroll)
+            .setPositiveButton(R.string.logs_copy) { _, _ ->
+                val cm = getSystemService(android.content.ClipboardManager::class.java)
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("MK Studio", text))
+                toast(getString(R.string.logs_copied))
+            }
+            .setNeutralButton(R.string.logs_share) { _, _ ->
+                startActivity(
+                    Intent.createChooser(
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        },
+                        getString(R.string.logs_share),
+                    ),
+                )
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     // ---------- Rendu d'état ----------
+
+    private val elapsedTicker = object : Runnable {
+        override fun run() {
+            if (Studio.busy) {
+                render()
+                ui.root.postDelayed(this, 1000)
+            }
+        }
+    }
 
     private fun render() {
         // Carte modèles
         renderModels()
         // Barre d'état
         val busy = Studio.busy
+        if (busy) {
+            ui.root.removeCallbacks(elapsedTicker)
+            ui.root.postDelayed(elapsedTicker, 1000)
+        }
         ui.statusCard.isVisible = busy || Studio.lastError != null
         if (busy) {
-            ui.statusText.text = Studio.statusText
+            val elapsed = getString(
+                R.string.st_elapsed,
+                Studio.fmtDuration(System.currentTimeMillis() - Studio.opStartedAt),
+            )
+            ui.statusText.text = Studio.statusText + elapsed
             ui.statusProgress.isVisible = true
             ui.statusProgress.isIndeterminate = Studio.percent < 0
             if (Studio.percent >= 0) ui.statusProgress.setProgressCompat(Studio.percent, true)
@@ -196,10 +260,10 @@ class MainActivity : AppCompatActivity() {
         var anyInstalled = false
         // Modèles de base + accélérateur ⚡ Turbo (proposé dès qu'une base est là).
         val baseInstalled = Models.CATALOG.any { Models.isInstalled(this, it) }
-        val rows = if (baseInstalled) Models.CATALOG + Models.LCM_LORA else Models.CATALOG
+        val rows = if (baseInstalled) Models.CATALOG + Models.LCM_LORA + Models.TAESD else Models.CATALOG
         rows.forEach { model ->
             val installed = Models.isInstalled(this, model)
-            if (installed && model.id != Models.LCM_LORA.id) anyInstalled = true
+            if (installed && model.id != Models.LCM_LORA.id && model.id != Models.TAESD.id) anyInstalled = true
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
@@ -224,10 +288,11 @@ class MainActivity : AppCompatActivity() {
             }
             box.addView(row)
         }
-        // La carte reste visible tant qu'il manque un modèle de base OU l'accélérateur.
+        // La carte reste visible tant qu'il manque un modèle de base, l'accélérateur
+        // ou le décodeur rapide.
         ui.modelCard.isVisible = !anyInstalled ||
             Models.CATALOG.any { !Models.isInstalled(this, it) } ||
-            !Models.turboReady(this)
+            !Models.turboReady(this) || !Models.isInstalled(this, Models.TAESD)
     }
 
     // ---------- Galerie ----------

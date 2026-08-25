@@ -19,10 +19,19 @@ object NativeSD {
         progressListener?.invoke(step, steps)
     }
 
-    /** Charge (ou réutilise) le modèle GGUF. Long : 10-40 s la première fois. */
-    external fun loadModel(path: String, threads: Int): Boolean
+    /**
+     * Charge (ou réutilise) le modèle GGUF. Long : 10-40 s la première fois.
+     * @param taesdPath mini-décodeur TAESD optionnel (décodage final ~10× plus vite).
+     */
+    external fun loadModel(path: String, threads: Int, taesdPath: String?): Boolean
 
     external fun isLoaded(): Boolean
+
+    /** Récupère et vide le journal du moteur natif (pour le Journal technique). */
+    external fun getLogs(): String
+
+    /** Capacités CPU détectées (NEON, DOTPROD, FP16…). */
+    external fun systemInfo(): String
 
     external fun unload()
 

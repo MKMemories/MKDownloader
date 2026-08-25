@@ -31,6 +31,7 @@ object Studio {
     @Volatile var phase: Phase = Phase.IDLE; private set
     @Volatile var percent: Int = -1; private set          // -1 = indéterminé
     @Volatile var statusText: String = ""; private set
+    @Volatile var opStartedAt: Long = 0L; private set     // pour le chrono « écoulé »
     @Volatile var lastError: String? = null; private set
     @Volatile var lastImage: Bitmap? = null; private set
     @Volatile var lastImageUri: Uri? = null; private set
@@ -50,8 +51,15 @@ object Studio {
     val busy: Boolean get() = phase != Phase.IDLE
 
     private fun update(p: Phase, pct: Int = -1, text: String = statusText) {
+        if (phase == Phase.IDLE && p != Phase.IDLE) opStartedAt = System.currentTimeMillis()
         phase = p; percent = pct; statusText = text
         main.post { onChange?.invoke(); notifier?.invoke() }
+    }
+
+    /** « 1 min 05 » / « 42 s » */
+    fun fmtDuration(ms: Long): String {
+        val s = (ms / 1000).coerceAtLeast(0)
+        return if (s >= 60) "%d min %02d".format(s / 60, s % 60) else "$s s"
     }
 
     // ---------- Téléchargement du modèle ----------
@@ -92,6 +100,13 @@ object Studio {
                 ok || cancelDownload -> null
                 else -> app.getString(R.string.st_dl_failed, error ?: "?")
             }
+            Logs.add(
+                when {
+                    ok -> "téléchargement ${model.id} OK (${dest.length() / (1024 * 1024)} Mo)"
+                    cancelDownload -> "téléchargement ${model.id} annulé"
+                    else -> "téléchargement ${model.id} ÉCHEC: $error"
+                },
+            )
             update(Phase.IDLE)
         }
     }
@@ -162,12 +177,41 @@ object Studio {
         scope.launch {
             try {
                 val threads = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(3, 6)
-                if (!NativeSD.loadModel(Models.fileOf(app, model).absolutePath, threads)) {
+                val taesd = Models.taesdPath(app)
+                val tLoad = System.currentTimeMillis()
+                if (!NativeSD.loadModel(Models.fileOf(app, model).absolutePath, threads, taesd)) {
+                    Logs.drainNative()
                     throw IllegalStateException(app.getString(R.string.st_model_load_failed))
                 }
+                val loadMs = System.currentTimeMillis() - tLoad
+                if (loadMs > 500) Logs.add("modèle ${model.id} chargé en ${fmtDuration(loadMs)} (threads=$threads, taesd=${taesd != null})")
+
+                // Suivi : seules les étapes dont le total == steps sont
+                // l'échantillonnage ; le reste (préparation/décodage interne)
+                // est étiqueté « Finalisation » — fini la boîte noire.
+                var lastStepTs = 0L
+                var avgStepMs = 0.0
+                var lastLoggedStep = 0
                 NativeSD.progressListener = { step, total ->
-                    val pct = if (total > 0) (step * 100 / total) else -1
-                    update(Phase.GENERATING, pct, app.getString(R.string.st_generating, step, total))
+                    if (total == steps) {
+                        val now = System.currentTimeMillis()
+                        if (lastStepTs > 0 && step > lastLoggedStep) {
+                            val d = (now - lastStepTs).toDouble() / (step - lastLoggedStep)
+                            avgStepMs = if (avgStepMs == 0.0) d else 0.6 * avgStepMs + 0.4 * d
+                            Logs.add("étape $step/$total en ${fmtDuration(d.toLong())}")
+                        }
+                        lastStepTs = now
+                        lastLoggedStep = step
+                        val pct = (step * 100 / total).coerceIn(0, 100)
+                        val eta = if (avgStepMs > 0 && step < total) {
+                            app.getString(R.string.st_eta, fmtDuration(((total - step) * avgStepMs).toLong()))
+                        } else ""
+                        update(Phase.GENERATING, pct, app.getString(R.string.st_generating, step, total) + eta)
+                    } else {
+                        // Phase interne (VAE, préparation…) : affichée pour info.
+                        val pct = if (total > 0) (step * 100 / total).coerceIn(0, 100) else -1
+                        update(Phase.GENERATING, pct, app.getString(R.string.st_finalizing))
+                    }
                 }
                 update(Phase.GENERATING, 0, app.getString(R.string.st_generating, 0, steps))
                 val initBytes = init?.let { toRgbBytes(it, width, height) }
@@ -175,9 +219,16 @@ object Studio {
                 // LCM : peu d'étapes et guidance très basse (1.5), sinon CFG 7.
                 val cfg = if (useTurbo) 1.5f else 7.0f
                 val loraPath = if (useTurbo) Models.fileOf(app, Models.LCM_LORA).absolutePath else null
+                val tGen = System.currentTimeMillis()
                 val rgb = NativeSD.generate(
                     prompt, negative, width, height, steps, cfg, seed, initBytes, strength,
                     loraPath, 1.0f, useTurbo,
+                )
+                val genMs = System.currentTimeMillis() - tGen
+                Logs.add(
+                    "génération ${width}x$height ${steps} étapes turbo=$useTurbo " +
+                        "modèle=${model.id} taesd=${taesd != null} → " +
+                        (if (rgb != null) "OK en ${fmtDuration(genMs)}" else "échec/annulée après ${fmtDuration(genMs)}"),
                 )
                 if (rgb != null) {
                     val bmp = fromRgbBytes(rgb, width, height)
@@ -188,7 +239,9 @@ object Studio {
                 }
             } catch (e: Exception) {
                 lastError = e.message ?: app.getString(R.string.st_gen_failed)
+                Logs.add("ERREUR: ${e.message}")
             } finally {
+                Logs.drainNative()
                 NativeSD.progressListener = null
                 update(Phase.IDLE)
             }

@@ -4,6 +4,16 @@ project(mkstudio)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# VITESSE : active les instructions vectorielles des CPU arm64 modernes
+# (dotprod = produits scalaires int8 câblés, fp16 = arithmétique demi-précision).
+# Gain 2-4× sur les modèles quantifiés. Requiert un CPU 2019+ (Cortex-A76…),
+# ce qui est déjà le prérequis de l'app (6 Go RAM).
+set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    add_compile_options("$<$<COMPILE_LANGUAGE:C>:-march=armv8.2-a+dotprod+fp16>"
+                        "$<$<COMPILE_LANGUAGE:CXX>:-march=armv8.2-a+dotprod+fp16>")
+endif()
+
 # stable-diffusion.cpp (cloné par la CI à un commit épinglé — voir studio.yml).
 # CPU uniquement : portable sur tous les téléphones arm64.
 set(SD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

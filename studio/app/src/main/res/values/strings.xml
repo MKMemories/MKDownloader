@@ -43,6 +43,14 @@
     <string name="st_dl_failed">Échec du téléchargement (%1$s). Réessaie (reprise automatique).</string>
     <string name="st_loading_model">Chargement du modèle… (peut prendre 30 s)</string>
     <string name="st_generating">Génération… étape %1$d/%2$d</string>
+    <string name="st_eta">" · ≈ %1$s restant"</string>
+    <string name="st_elapsed">" · écoulé %1$s"</string>
+    <string name="st_finalizing">Finalisation de l\'image…</string>
+    <string name="logs_button">🐞 Journal technique</string>
+    <string name="logs_title">Journal technique</string>
+    <string name="logs_copy">Copier</string>
+    <string name="logs_share">Partager</string>
+    <string name="logs_copied">Journal copié.</string>
     <string name="st_gen_failed">La génération a échoué ou a été annulée.</string>
     <string name="st_model_load_failed">Impossible de charger le modèle (fichier corrompu ? mémoire insuffisante ?).</string>
     <string name="st_working">Travail en cours…</string>
