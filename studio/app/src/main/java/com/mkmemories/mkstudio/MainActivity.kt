@@ -79,7 +79,10 @@ class MainActivity : AppCompatActivity() {
 
         buildChips(ui.styleChips, styles.map { it.first })
         buildChips(ui.formatChips, formats.map { it.first })
-        buildChips(ui.modeChips, listOf(getString(R.string.mode_turbo), getString(R.string.mode_precise)))
+        buildChips(
+            ui.modeChips,
+            listOf(getString(R.string.mode_turbo), getString(R.string.mode_precise), getString(R.string.mode_cloud)),
+        )
         buildChips(ui.qualityChips, qualities.map { it.first }, checkedIndex = 1)
         buildChips(ui.strengthChips, strengths.map { it.first }, checkedIndex = 1)
 
@@ -99,6 +102,7 @@ class MainActivity : AppCompatActivity() {
         ui.cancelBtn.setOnClickListener { Studio.cancelCurrent() }
         ui.shareBtn.setOnClickListener { shareResult() }
         ui.logsBtn.setOnClickListener { showLogs() }
+        ui.cloudBtn.setOnClickListener { showCloudSetup() }
 
         ui.galleryList.layoutManager = GridLayoutManager(this, 2)
         ui.galleryList.adapter = galleryAdapter
@@ -116,12 +120,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun generateFromCreate() {
         if (Studio.busy) { toast(getString(R.string.busy)); return }
-        if (Models.installed(this) == null) { toast(getString(R.string.need_model)); return }
         val prompt = ui.promptInput.text?.toString()?.trim().orEmpty()
         if (prompt.isEmpty()) { toast(getString(R.string.need_prompt)); return }
         val style = styles[checkedIndex(ui.styleChips)].second
+        val mode = checkedIndex(ui.modeChips)
+
+        // ☁ Qualité max : API Google avec la clé de l'utilisateur.
+        if (mode == 2) {
+            if (!CloudEngine.hasKey(this)) { showCloudSetup(); return }
+            val aspect = listOf("1:1", "3:4", "4:3", "1:1")[checkedIndex(ui.formatChips)]
+            Studio.generate(this, prompt + style, "", 0, 0, 0, cloud = true, aspect = aspect)
+            render()
+            return
+        }
+
+        if (Models.installed(this) == null) { toast(getString(R.string.need_model)); return }
         val (_, w, h) = formats[checkedIndex(ui.formatChips)]
-        val turbo = checkedIndex(ui.modeChips) == 0
+        val turbo = mode == 0
         val builtIn = Models.installed(this)?.lcmBuiltIn == true
         if (turbo && !builtIn && !Models.turboReady(this)) { toast(getString(R.string.need_turbo)); return }
         val q = qualities[checkedIndex(ui.qualityChips)]
@@ -132,10 +147,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun generateFromEdit() {
         if (Studio.busy) { toast(getString(R.string.busy)); return }
-        if (Models.installed(this) == null) { toast(getString(R.string.need_model)); return }
         val src = editBitmap ?: run { toast(getString(R.string.edit_need_photo)); return }
         val prompt = ui.editPrompt.text?.toString()?.trim().orEmpty()
         if (prompt.isEmpty()) { toast(getString(R.string.need_prompt)); return }
+
+        // ☁ Qualité max : la retouche Gemini est spectaculaire (suit le Moteur).
+        if (checkedIndex(ui.modeChips) == 2) {
+            if (!CloudEngine.hasKey(this)) { showCloudSetup(); return }
+            Studio.generate(this, prompt, "", 0, 0, 0, init = src, cloud = true)
+            render()
+            return
+        }
+
+        if (Models.installed(this) == null) { toast(getString(R.string.need_model)); return }
         val strength = strengths[checkedIndex(ui.strengthChips)].second
         // La retouche garde un format carré 512 (bon compromis vitesse/qualité).
         val turbo = Models.turboReady(this)
@@ -144,6 +168,41 @@ class MainActivity : AppCompatActivity() {
             init = src, strength = strength, turbo = turbo,
         )
         render()
+    }
+
+    // ---------- ☁ Qualité max (clé Google) ----------
+
+    private fun showCloudSetup() {
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val input = android.widget.EditText(this).apply {
+            hint = getString(R.string.cloud_key_hint)
+            setText(CloudEngine.key(this@MainActivity).orEmpty())
+            setSingleLine(true)
+        }
+        val msg = android.widget.TextView(this).apply {
+            text = getString(R.string.cloud_setup_msg)
+            setTextColor(getColor(R.color.text_dim))
+            textSize = 13f
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(msg)
+            addView(input)
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.cloud_setup_title)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
+            .setPositiveButton(R.string.cloud_save) { _, _ ->
+                CloudEngine.setKey(this, input.text?.toString())
+                if (CloudEngine.hasKey(this)) toast(getString(R.string.cloud_key_saved))
+            }
+            .setNeutralButton(R.string.cloud_get_key) { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun loadEditBitmap(uri: Uri) {

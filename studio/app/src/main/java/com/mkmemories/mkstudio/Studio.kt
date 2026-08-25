@@ -218,9 +218,34 @@ object Studio {
         init: Bitmap? = null,
         strength: Float = 0.55f,
         turbo: Boolean = false,
+        cloud: Boolean = false,
+        aspect: String = "1:1",
     ) {
         if (busy) return
         val app = context.applicationContext
+
+        // ---- Mode ☁ Qualité max : API Google (clé de l'utilisateur) ----
+        if (cloud) {
+            lastError = null
+            StudioService.start(app)
+            update(Phase.GENERATING, -1, app.getString(R.string.st_cloud_generating))
+            scope.launch {
+                val t0 = System.currentTimeMillis()
+                try {
+                    val bmp = CloudEngine.generate(app, prompt, aspect, init)
+                    lastImage = bmp
+                    lastImageUri = saveToGallery(app, bmp)
+                    Logs.add("cloud OK en ${fmtDuration(System.currentTimeMillis() - t0)} (${bmp.width}x${bmp.height}, retouche=${init != null})")
+                } catch (e: Exception) {
+                    lastError = e.message
+                    Logs.add("cloud ERREUR après ${fmtDuration(System.currentTimeMillis() - t0)}: ${e.message}")
+                } finally {
+                    update(Phase.IDLE)
+                }
+            }
+            return
+        }
+
         val model = Models.installed(app) ?: return
         // Modèle « LCM intégré » : Turbo natif sans LoRA — toujours en
         // échantillonnage LCM (peu d'étapes, guidance basse), sinon résultats dégradés.

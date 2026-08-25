@@ -18,6 +18,15 @@
     <string name="engine_title">Moteur</string>
     <string name="mode_turbo">⚡ Turbo (recommandé)</string>
     <string name="mode_precise">🎯 Précis (lent)</string>
+    <string name="mode_cloud">☁ Qualité max</string>
+    <string name="cloud_button">☁ Clé qualité max</string>
+    <string name="cloud_setup_title">☁ Qualité max (cloud Google)</string>
+    <string name="cloud_setup_msg">Images réalistes état de l\'art en ~10 s via l\'API Google (modèle image Gemini).\n\n1. Va sur aistudio.google.com/apikey (compte Google, gratuit)\n2. « Create API key » → copie la clé (AIza…)\n3. Colle-la ci-dessous\n\nÀ savoir : quota gratuit limité par jour ; les prompts/photos partent chez Google (contrairement aux modes locaux, 100 % privés). La clé reste stockée sur ton téléphone.</string>
+    <string name="cloud_key_hint">Colle ta clé API (AIza…)</string>
+    <string name="cloud_get_key">Obtenir une clé</string>
+    <string name="cloud_save">Enregistrer</string>
+    <string name="cloud_key_saved">Clé enregistrée ✔ — mode ☁ Qualité max actif.</string>
+    <string name="st_cloud_generating">Génération ☁ qualité max… (~10-30 s)</string>
     <string name="need_turbo">Télécharge d\'abord l\'accélérateur ⚡ Turbo (70 Mo) dans la carte « Modèle d\'IA ».</string>
     <string name="generate">✨ Générer l\'image</string>
     <string name="time_hint">⏱ Génération sur l\'appareil : de 1 à plusieurs minutes selon le téléphone.</string>
