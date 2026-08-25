@@ -176,7 +176,10 @@ object Studio {
         update(Phase.LOADING, -1, app.getString(R.string.st_loading_model))
         scope.launch {
             try {
-                val threads = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(3, 6)
+                // big.LITTLE : sur 8 cœurs (1 gros + 4 moyens + 3 petits), un thread
+                // de trop tombe sur un petit cœur qui freine tout le monde → 5.
+                val cores = Runtime.getRuntime().availableProcessors()
+                val threads = if (cores >= 8) 5 else (cores - 2).coerceIn(3, 6)
                 val taesd = Models.taesdPath(app)
                 val tLoad = System.currentTimeMillis()
                 if (!NativeSD.loadModel(Models.fileOf(app, model).absolutePath, threads, taesd)) {

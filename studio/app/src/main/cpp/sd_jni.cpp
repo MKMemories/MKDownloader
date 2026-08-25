@@ -115,10 +115,16 @@ Java_com_mkmemories_mkstudio_NativeSD_loadModel(JNIEnv* env, jobject, jstring jp
     // TAESD : mini-décodeur (~10 Mo) qui remplace le VAE pour l'image finale
     // → décodage en ~1 s au lieu de 10-30 s (légère perte de finesse).
     if (!taesd.empty()) p.taesd_path = taesd.c_str();
-    // Optimisations CPU : flash attention (mémoire/vitesse) + convolution directe.
+    // Optimisations CPU : flash attention + convolution directe (diffusion).
+    // PAS de conv directe côté VAE : mesuré 10,9 s de décodage TAESD avec,
+    // le mini-décodeur préfère le chemin classique.
     p.diffusion_flash_attn = true;
-    p.vae_conv_direct = true;
+    p.vae_conv_direct = false;
     p.diffusion_conv_direct = true;
+    // LoRA fusionné UNE FOIS dans les poids (au 1er lancement) au lieu d'être
+    // appliqué à la volée À CHAQUE étape — mesuré comme gros frein (journal
+    // S23 Ultra : « apply lora at runtime », ~38 s/étape).
+    p.lora_apply_mode = LORA_APPLY_IMMEDIATELY;
     push_log("app", ("chargement du modèle: " + std::string(path) +
                      " threads=" + std::to_string(threads) +
                      (taesd.empty() ? "" : " taesd=oui")).c_str());
