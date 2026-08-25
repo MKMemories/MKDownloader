@@ -70,6 +70,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         ui = ActivityMainBinding.inflate(layoutInflater)
         setContentView(ui.root)
+        Logs.attach(this)   // journal persisté + capture des crashs
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -120,7 +121,8 @@ class MainActivity : AppCompatActivity() {
         val style = styles[checkedIndex(ui.styleChips)].second
         val (_, w, h) = formats[checkedIndex(ui.formatChips)]
         val turbo = checkedIndex(ui.modeChips) == 0
-        if (turbo && !Models.turboReady(this)) { toast(getString(R.string.need_turbo)); return }
+        val builtIn = Models.installed(this)?.lcmBuiltIn == true
+        if (turbo && !builtIn && !Models.turboReady(this)) { toast(getString(R.string.need_turbo)); return }
         val q = qualities[checkedIndex(ui.qualityChips)]
         val steps = if (turbo) q.second else q.third
         Studio.generate(this, prompt + style, negativeDefault, w, h, steps, turbo = turbo)

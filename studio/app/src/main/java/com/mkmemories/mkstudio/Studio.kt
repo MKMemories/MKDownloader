@@ -76,7 +76,13 @@ object Studio {
             val part = File(dest.absolutePath + ".part")
             var ok = false
             var error: String? = null
-            for (url in model.urls) {
+            // Sources : URLs fixes + fichiers résolus à l'exécution via l'API HF.
+            val candidates = model.urls.toMutableList()
+            model.repos.forEach { repo ->
+                resolveGgufUrl(repo, model.filePattern)?.let { candidates += it }
+            }
+            if (candidates.isEmpty()) error = "aucune source trouvée"
+            for (url in candidates) {
                 try {
                     fetchResumable(url, part) { done, total ->
                         val pct = if (total > 0) ((done * 100) / total).toInt() else -1
@@ -115,6 +121,32 @@ object Studio {
         cancelDownload = true
         NativeSD.cancel()
     }
+
+    /**
+     * Trouve l'URL du fichier voulu dans un dépôt HuggingFace (API /tree) : le
+     * nom exact n'est pas codé en dur — robuste aux renommages.
+     */
+    private fun resolveGgufUrl(repo: String, pattern: String): String? = runCatching {
+        val conn = URL("https://huggingface.co/api/models/$repo/tree/main")
+            .openConnection() as HttpURLConnection
+        conn.connectTimeout = 15000
+        conn.readTimeout = 20000
+        val body = conn.inputStream.use { it.readBytes().decodeToString() }
+        val arr = org.json.JSONArray(body)
+        val files = mutableListOf<Pair<String, Long>>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            files += o.optString("path") to o.optLong("size", Long.MAX_VALUE)
+        }
+        val rx = Regex(pattern)
+        val match = files.filter { rx.containsMatchIn(it.first) }.minByOrNull { it.second }
+        // Repli : n'importe quel .gguf, le plus petit (quantification la plus légère).
+            ?: files.filter { it.first.endsWith(".gguf", true) }.minByOrNull { it.second }
+        match?.let {
+            Logs.add("résolu $repo → ${it.first} (${it.second / (1024 * 1024)} Mo)")
+            "https://huggingface.co/$repo/resolve/main/${it.first}"
+        }
+    }.onFailure { Logs.add("résolution $repo impossible: ${it.message}") }.getOrNull()
 
     private fun fetchResumable(url: String, part: File, progress: (Long, Long) -> Boolean) {
         var offset = if (part.exists()) part.length() else 0L
@@ -170,12 +202,22 @@ object Studio {
         if (busy) return
         val app = context.applicationContext
         val model = Models.installed(app) ?: return
-        val useTurbo = turbo && Models.turboReady(app)
+        // Modèle « LCM intégré » : Turbo natif sans LoRA — toujours en
+        // échantillonnage LCM (peu d'étapes, guidance basse), sinon résultats dégradés.
+        val builtIn = model.lcmBuiltIn
+        val useTurbo = builtIn || (turbo && Models.turboReady(app))
+        val runSteps = if (builtIn) steps.coerceAtMost(12) else steps
         lastError = null
         StudioService.start(app)
         update(Phase.LOADING, -1, app.getString(R.string.st_loading_model))
         scope.launch {
             try {
+                runCatching {
+                    val am = app.getSystemService(android.app.ActivityManager::class.java)
+                    val mi = android.app.ActivityManager.MemoryInfo()
+                    am.getMemoryInfo(mi)
+                    Logs.add("mémoire libre ${mi.availMem / 1048576} Mo / ${mi.totalMem / 1048576} Mo")
+                }
                 // big.LITTLE : sur 8 cœurs (1 gros + 4 moyens + 3 petits), un thread
                 // de trop tombe sur un petit cœur qui freine tout le monde → 5.
                 val cores = Runtime.getRuntime().availableProcessors()
@@ -196,7 +238,7 @@ object Studio {
                 var avgStepMs = 0.0
                 var lastLoggedStep = 0
                 NativeSD.progressListener = { step, total ->
-                    if (total == steps) {
+                    if (total == runSteps) {
                         val now = System.currentTimeMillis()
                         if (lastStepTs > 0 && step > lastLoggedStep) {
                             val d = (now - lastStepTs).toDouble() / (step - lastLoggedStep)
@@ -216,20 +258,23 @@ object Studio {
                         update(Phase.GENERATING, pct, app.getString(R.string.st_finalizing))
                     }
                 }
-                update(Phase.GENERATING, 0, app.getString(R.string.st_generating, 0, steps))
+                update(Phase.GENERATING, 0, app.getString(R.string.st_generating, 0, runSteps))
                 val initBytes = init?.let { toRgbBytes(it, width, height) }
                 val seed = abs(Random.nextLong() % 2_000_000_000L)
                 // LCM : peu d'étapes et guidance très basse (1.5), sinon CFG 7.
                 val cfg = if (useTurbo) 1.5f else 7.0f
-                val loraPath = if (useTurbo) Models.fileOf(app, Models.LCM_LORA).absolutePath else null
+                // LCM intégré : pas de LoRA à charger (c'était le gros frein).
+                val loraPath = if (useTurbo && !builtIn) {
+                    Models.fileOf(app, Models.LCM_LORA).absolutePath
+                } else null
                 val tGen = System.currentTimeMillis()
                 val rgb = NativeSD.generate(
-                    prompt, negative, width, height, steps, cfg, seed, initBytes, strength,
+                    prompt, negative, width, height, runSteps, cfg, seed, initBytes, strength,
                     loraPath, 1.0f, useTurbo,
                 )
                 val genMs = System.currentTimeMillis() - tGen
                 Logs.add(
-                    "génération ${width}x$height ${steps} étapes turbo=$useTurbo " +
+                    "génération ${width}x$height ${runSteps} étapes turbo=$useTurbo lcmIntégré=$builtIn " +
                         "modèle=${model.id} taesd=${taesd != null} → " +
                         (if (rgb != null) "OK en ${fmtDuration(genMs)}" else "échec/annulée après ${fmtDuration(genMs)}"),
                 )

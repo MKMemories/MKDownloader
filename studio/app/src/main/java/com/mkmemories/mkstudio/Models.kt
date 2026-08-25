@@ -14,11 +14,31 @@ data class SdModel(
     val approxMb: Int,
     val urls: List<String>,
     val minBytes: Long = 200L * 1024 * 1024,   // taille minimale d'un fichier valide
+    /** LCM distillé DANS le modèle : Turbo natif sans LoRA (rapide et stable). */
+    val lcmBuiltIn: Boolean = false,
+    /** Dépôts HuggingFace où résoudre le fichier à l'exécution (API /tree). */
+    val repos: List<String> = emptyList(),
+    /** Motif (regex) du fichier à choisir dans le dépôt. */
+    val filePattern: String = "(?i)q4_0[^/]*\\.gguf$",
 )
 
 object Models {
 
     val CATALOG = listOf(
+        // LCM distillé dans le modèle : 4 étapes NATIVEMENT, sans LoRA à
+        // appliquer (le gros frein mesuré), et esthétique Dreamshaper.
+        SdModel(
+            id = "ds8_lcm",
+            label = "⚡ Dreamshaper 8 + Turbo intégré (≈ 1,1 Go) · LE plus rapide",
+            fileName = "ds8_lcm_q4_0.gguf",
+            approxMb = 1100,
+            urls = emptyList(),   // fichier résolu à l'exécution via l'API HF
+            lcmBuiltIn = true,
+            repos = listOf(
+                "stduhpf/dreamshaper-8LCM-im-GGUF-sdcpp",
+                "Steward/lcm-dreamshaper-v7-gguf",
+            ),
+        ),
         SdModel(
             id = "sd15_q4",
             label = "Rapide — SD 1.5 Q4 (≈ 1,0 Go) · recommandé",

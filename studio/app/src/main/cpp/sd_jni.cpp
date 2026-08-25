@@ -121,10 +121,9 @@ Java_com_mkmemories_mkstudio_NativeSD_loadModel(JNIEnv* env, jobject, jstring jp
     p.diffusion_flash_attn = true;
     p.vae_conv_direct = false;
     p.diffusion_conv_direct = true;
-    // LoRA fusionné UNE FOIS dans les poids (au 1er lancement) au lieu d'être
-    // appliqué à la volée À CHAQUE étape — mesuré comme gros frein (journal
-    // S23 Ultra : « apply lora at runtime », ~38 s/étape).
-    p.lora_apply_mode = LORA_APPLY_IMMEDIATELY;
+    // LoRA : mode AUTO (à la volée sur modèles quantifiés). La fusion immédiate
+    // (v1.3) faisait planter l'app (pic mémoire pendant la fusion sur Q8).
+    // La vraie réponse vitesse est le modèle « LCM intégré » (sans LoRA).
     push_log("app", ("chargement du modèle: " + std::string(path) +
                      " threads=" + std::to_string(threads) +
                      (taesd.empty() ? "" : " taesd=oui")).c_str());

@@ -26,6 +26,7 @@ class StudioService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Logs.attach(this)
         createChannel()
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
