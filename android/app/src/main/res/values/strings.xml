@@ -234,6 +234,14 @@
     <string name="bk_analyzing">Analyse de la chaîne…</string>
     <string name="bk_none">Aucune vidéo trouvée (chaîne privée ? connecte ton compte YouTube dans ⚙ Comptes).</string>
     <string name="bk_summary">%1$d vidéos trouvées.\n\nEspace libre : %2$s\nTaille estimée : ~%3$s (approximatif)\n\nPar lots de 3, pause automatique sous 3 Go libres, reprise intelligente : les vidéos déjà archivées sont sautées — tu peux t\'y prendre en plusieurs fois.\n\nQualité d\'archive :</string>
+    <string name="bk_mode_all">📼 Toute la chaîne (%1$d vidéos)</string>
+    <string name="bk_mode_playlists">🗂 Par playlists (recréer des chaînes thématiques)</string>
+    <string name="bk_pl_loading">Récupération des playlists…</string>
+    <string name="bk_pl_none">Aucune playlist trouvée (publiques uniquement — connecte ton compte YouTube dans ⚙ Comptes pour les autres).</string>
+    <string name="bk_pl_pick_title">Playlists à archiver (%1$d)</string>
+    <string name="bk_pl_videos_loading">Lecture des playlists…</string>
+    <string name="bk_pl_partial">%1$d playlist(s) illisible(s) — ignorée(s).</string>
+    <string name="bk_pl_line">🗂 %1$d playlists → un sous-dossier autonome chacune, vidéos numérotées dans l\'ordre (une vidéo commune à 2 playlists est archivée 2 fois).\n\n</string>
     <string name="bk_start">🗄 Lancer la sauvegarde</string>
     <string name="bk_started">Sauvegarde lancée : %1$d vidéos à archiver (par lots de 3).</string>
     <string name="bk_all_done">Tout est déjà archivé ✔</string>

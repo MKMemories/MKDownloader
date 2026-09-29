@@ -25,7 +25,21 @@ import java.io.File
  */
 object Backup {
 
-    data class Entry(val id: String, val title: String, val url: String)
+    /**
+     * Une vidéo à archiver. [dir] : sous-dossier RELATIF sous Sauvegarde/ (rempli
+     * au lancement) ; [prefix] : préfixe de nom pour garder l'ordre d'une playlist
+     * (« 001 - »), null hors playlist.
+     */
+    data class Entry(
+        val id: String,
+        val title: String,
+        val url: String,
+        val dir: String = "",
+        val prefix: String? = null,
+    )
+
+    /** Une playlist de la chaîne (pour l'archivage thématique). */
+    data class PlaylistRef(val id: String, val title: String, val url: String)
 
     private const val PREFS = "mkdl_backup"
     private const val KEY = "state"
@@ -45,7 +59,7 @@ object Backup {
         get() = (total - synchronized(pending) { pending.size } - queuedCount()).coerceAtLeast(0)
 
     private fun queuedCount(): Int = Downloads.jobs().count {
-        it.backupDir == dirName &&
+        it.backupDir != null && it.backupDir.startsWith(dirName) &&
             (it.status == Downloads.Status.QUEUED || it.status == Downloads.Status.RUNNING)
     }
 
@@ -105,16 +119,60 @@ object Backup {
             name to list
         }
 
+    /** Liste les playlists publiques de la chaîne (onglet Playlists). */
+    suspend fun analyzePlaylists(context: Context, channelInput: String): List<PlaylistRef> =
+        withContext(Dispatchers.IO) {
+            Engine.ensureReady(context)
+            val base = normalizeChannelUrl(channelInput)
+                .removeSuffix("/videos").trimEnd('/') + "/playlists"
+            val request = YoutubeDLRequest(base).apply {
+                addOption("--dump-single-json")
+                addOption("--flat-playlist")
+                addOption("--no-warnings")
+                addOption("--extractor-args", Engine.YT_ARGS)
+                Settings.cookiesForUrl(context, base)?.let { addOption("--cookies", it.absolutePath) }
+            }
+            val out = YoutubeDL.getInstance().execute(request, null, null).out
+            val start = out.indexOf('{')
+            require(start >= 0) { "Playlists introuvables." }
+            val root = JSONObject(out.substring(start))
+            val list = mutableListOf<PlaylistRef>()
+            fun collect(arr: JSONArray?) {
+                arr ?: return
+                for (i in 0 until arr.length()) {
+                    val e = arr.optJSONObject(i) ?: continue
+                    if (e.has("entries")) { collect(e.optJSONArray("entries")); continue }
+                    val id = e.optString("id")
+                    if (id.isBlank()) continue
+                    val url = e.optString("url")
+                        .ifBlank { "https://www.youtube.com/playlist?list=$id" }
+                    list += PlaylistRef(id, e.optString("title").ifBlank { id }, url)
+                }
+            }
+            collect(root.optJSONArray("entries"))
+            list
+        }
+
     // ---------- Lancement / pompe par lots ----------
 
-    /** Lance (ou relance) la sauvegarde ; les vidéos déjà archivées sont sautées. */
-    fun start(context: Context, channelName: String, entries: List<Entry>, quality: Quality): Int {
+    /**
+     * Lance (ou relance) la sauvegarde. Chaque entrée peut viser un sous-dossier
+     * (playlist) ; le doublon est vérifié PAR DOSSIER — une même vidéo présente
+     * dans deux playlists est archivée dans chacune (dossiers autonomes).
+     * Renvoie le nombre de vidéos restant réellement à archiver.
+     */
+    fun start(context: Context, rootName: String, entries: List<Entry>, quality: Quality): Int {
         val app = context.applicationContext
-        dirName = sanitize(channelName)
+        dirName = sanitize(rootName)
         qualityId = quality.id
-        val already = existingIds(app)
-        val todo = entries.filter { it.id !in already }
-        total = entries.size
+        // Dossier COMPLET par entrée : <chaîne> ou <chaîne>/<playlist>.
+        val resolved = entries.map {
+            it.copy(dir = if (it.dir.isBlank()) dirName else dirName + "/" + sanitize(it.dir))
+        }
+        val existingByDir = resolved.map { it.dir }.distinct()
+            .associateWith { existingIdsIn(app, it) }
+        val todo = resolved.filter { it.id !in existingByDir[it.dir].orEmpty() }
+        total = resolved.size
         synchronized(pending) { pending.clear(); pending.addAll(todo) }
         active = true
         pausedForSpace = false
@@ -155,7 +213,7 @@ object Backup {
                 url = next.url, title = next.title, uploader = null,
                 durationSec = 0, thumbnail = null,
             )
-            Downloads.startBackup(app, item, quality, dirName)
+            Downloads.startBackup(app, item, quality, next.dir.ifBlank { dirName }, next.prefix)
             slots--
         }
         if (synchronized(pending) { pending.isEmpty() } && queuedCount() == 0) {
@@ -187,8 +245,8 @@ object Backup {
         else String.format("%d Mo", (bytes / (1024 * 1024)).coerceAtLeast(1))
     }
 
-    /** IDs déjà archivés : fichiers vidéo « … [id].ext » présents dans le dossier. */
-    private fun existingIds(context: Context): Set<String> {
+    /** IDs déjà archivés : fichiers vidéo « … [id].ext » présents dans [dir]. */
+    private fun existingIdsIn(context: Context, dir: String): Set<String> {
         val rx = Regex("\\[([A-Za-z0-9_-]{6,})\\]\\.(mp4|webm|mkv|m4v|mov)$")
         val found = mutableSetOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -197,7 +255,7 @@ object Backup {
                     MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                     arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
                     "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
-                    arrayOf("%MKDownloader/Sauvegarde/$dirName%"),
+                    arrayOf("%MKDownloader/Sauvegarde/$dir%"),
                     null,
                 )?.use { c ->
                     val col = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
@@ -207,14 +265,17 @@ object Backup {
                 }
             }
         } else {
-            val dir = File(
+            val base = File(
                 context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                "MKDownloader/Sauvegarde/$dirName",
+                "MKDownloader/Sauvegarde/$dir",
             )
-            dir.listFiles()?.forEach { f -> rx.find(f.name)?.let { found += it.groupValues[1] } }
+            base.listFiles()?.forEach { f -> rx.find(f.name)?.let { found += it.groupValues[1] } }
         }
         return found
     }
+
+    /** Version publique (pour préparer les sous-dossiers de playlists). */
+    fun sanitizeName(name: String) = sanitize(name)
 
     private fun sanitize(name: String) =
         name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(60).ifBlank { "Chaine" }
@@ -230,7 +291,10 @@ object Backup {
             val arr = JSONArray()
             synchronized(pending) {
                 pending.forEach {
-                    arr.put(JSONObject().put("id", it.id).put("t", it.title).put("u", it.url))
+                    arr.put(
+                        JSONObject().put("id", it.id).put("t", it.title).put("u", it.url)
+                            .put("d", it.dir).put("p", it.prefix ?: JSONObject.NULL),
+                    )
                 }
             }
             put("pending", arr)
@@ -255,7 +319,11 @@ object Backup {
                 val arr = o.optJSONArray("pending") ?: JSONArray()
                 for (i in 0 until arr.length()) {
                     val e = arr.optJSONObject(i) ?: continue
-                    pending += Entry(e.optString("id"), e.optString("t"), e.optString("u"))
+                    pending += Entry(
+                        e.optString("id"), e.optString("t"), e.optString("u"),
+                        dir = e.optString("d"),
+                        prefix = if (e.isNull("p")) null else e.optString("p"),
+                    )
                 }
             }
         }

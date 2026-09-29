@@ -38,6 +38,7 @@ object Downloads {
         val endSec: Int? = null,
         val recordSeconds: Int? = null,   // enregistrement d'un direct : durée d'une tranche
         val backupDir: String? = null,    // 🗄 sauvegarde de chaîne : sous-dossier d'archive
+        val backupPrefix: String? = null, // 🗄 ordre dans la playlist (« 001 - »)
         var status: Status = Status.QUEUED,
         var percent: Int = -1,
         var error: String? = null,
@@ -103,8 +104,14 @@ object Downloads {
     }
 
     /** Ajoute une vidéo de SAUVEGARDE de chaîne (archive complète structurée). */
-    fun startBackup(context: Context, item: VideoItem, quality: Quality, backupDir: String): Job {
-        val job = Job(newId(), item, quality, backupDir = backupDir)
+    fun startBackup(
+        context: Context,
+        item: VideoItem,
+        quality: Quality,
+        backupDir: String,
+        backupPrefix: String? = null,
+    ): Job {
+        val job = Job(newId(), item, quality, backupDir = backupDir, backupPrefix = backupPrefix)
         jobsList.add(job)
         persist(context)
         DownloadService.start(context.applicationContext)
@@ -330,7 +337,8 @@ object Downloads {
                     addOption("--write-description")
                     addOption("--write-info-json")
                     addOption("--no-write-playlist-metafiles")
-                    addOption("-o", "${workDir.absolutePath}/%(upload_date)s - %(title).110B [%(id)s].%(ext)s")
+                    val prefix = job.backupPrefix.orEmpty()
+                    addOption("-o", "${workDir.absolutePath}/$prefix%(upload_date)s - %(title).100B [%(id)s].%(ext)s")
                 } else {
                     addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
                 }
@@ -449,6 +457,7 @@ object Downloads {
                     put("start", j.startSec ?: JSONObject.NULL)
                     put("end", j.endSec ?: JSONObject.NULL)
                     put("bdir", j.backupDir ?: JSONObject.NULL)
+                    put("bpre", j.backupPrefix ?: JSONObject.NULL)
                     put("status", j.status.name)
                     put("error", j.error ?: JSONObject.NULL)
                 }
@@ -481,6 +490,7 @@ object Downloads {
                         startSec = if (o.isNull("start")) null else o.optInt("start"),
                         endSec = if (o.isNull("end")) null else o.optInt("end"),
                         backupDir = if (o.isNull("bdir")) null else o.optStringOrNull("bdir"),
+                        backupPrefix = if (o.isNull("bpre")) null else o.optStringOrNull("bpre"),
                         status = status,
                         error = if (o.isNull("error")) null else o.optStringOrNull("error"),
                     )

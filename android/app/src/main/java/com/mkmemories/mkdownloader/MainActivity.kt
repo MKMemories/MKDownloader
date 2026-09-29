@@ -886,9 +886,82 @@ class MainActivity : AppCompatActivity() {
             val result = runCatching { Backup.analyze(this@MainActivity, url) }
             setBusy(false)
             result.onSuccess { (name, entries) ->
-                if (entries.isEmpty()) toast(getString(R.string.bk_none))
-                else showBackupConfirm(name, entries)
+                when {
+                    entries.isEmpty() -> toast(getString(R.string.bk_none))
+                    // Playlist collée directement : archive numérotée dans l'ordre.
+                    url.contains("list=") -> showBackupConfirm(
+                        name,
+                        entries.mapIndexed { i, e -> e.copy(prefix = String.format("%03d - ", i + 1)) },
+                    )
+                    else -> showBackupModeChoice(url, name, entries)
+                }
             }.onFailure { toast(it.message ?: getString(R.string.bk_none)) }
+        }
+    }
+
+    /** Choix : toute la chaîne, ou PAR PLAYLISTS (pour recréer des chaînes thématiques). */
+    private fun showBackupModeChoice(channelUrl: String, name: String, all: List<Backup.Entry>) {
+        val options = arrayOf(
+            getString(R.string.bk_mode_all, all.size),
+            getString(R.string.bk_mode_playlists),
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(name)
+            .setItems(options) { _, i ->
+                if (i == 0) showBackupConfirm(name, all)
+                else loadPlaylistsForBackup(channelUrl, name)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun loadPlaylistsForBackup(channelUrl: String, name: String) {
+        setBusy(true, R.string.bk_pl_loading)
+        lifecycleScope.launch {
+            val result = runCatching { Backup.analyzePlaylists(this@MainActivity, channelUrl) }
+            setBusy(false)
+            result.onSuccess { pls ->
+                if (pls.isEmpty()) toast(getString(R.string.bk_pl_none))
+                else showPlaylistPicker(name, pls)
+            }.onFailure { toast(it.message ?: getString(R.string.bk_pl_none)) }
+        }
+    }
+
+    private fun showPlaylistPicker(name: String, playlists: List<Backup.PlaylistRef>) {
+        val checked = BooleanArray(playlists.size) { true }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.bk_pl_pick_title, playlists.size))
+            .setMultiChoiceItems(playlists.map { it.title }.toTypedArray(), checked) { _, i, v ->
+                checked[i] = v
+            }
+            .setPositiveButton(R.string.bk_analyze) { _, _ ->
+                val chosen = playlists.filterIndexed { i, _ -> checked[i] }
+                if (chosen.isNotEmpty()) collectPlaylistVideos(name, chosen)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** Lit chaque playlist choisie et assemble : sous-dossier + numéro d'ordre. */
+    private fun collectPlaylistVideos(name: String, playlists: List<Backup.PlaylistRef>) {
+        setBusy(true, R.string.bk_pl_videos_loading)
+        lifecycleScope.launch {
+            val entries = mutableListOf<Backup.Entry>()
+            var failed = 0
+            for (pl in playlists) {
+                val vids = runCatching { Backup.analyze(this@MainActivity, pl.url).second }
+                    .getOrElse { failed++; emptyList() }
+                vids.forEachIndexed { i, e ->
+                    entries += e.copy(dir = pl.title, prefix = String.format("%03d - ", i + 1))
+                }
+            }
+            setBusy(false)
+            if (entries.isEmpty()) {
+                toast(getString(R.string.bk_pl_none))
+            } else {
+                if (failed > 0) toast(getString(R.string.bk_pl_partial, failed))
+                showBackupConfirm(name, entries)
+            }
         }
     }
 
@@ -898,8 +971,10 @@ class MainActivity : AppCompatActivity() {
         val d = resources.displayMetrics.density
         val pad = (20 * d).toInt()
         val summary = android.widget.TextView(this)
+        val dirs = entries.map { it.dir }.filter { it.isNotBlank() }.distinct().size
         fun refresh() {
-            summary.text = getString(
+            val plLine = if (dirs > 0) getString(R.string.bk_pl_line, dirs) else ""
+            summary.text = plLine + getString(
                 R.string.bk_summary,
                 entries.size,
                 Backup.fmtSize(Backup.freeBytes(this)),
