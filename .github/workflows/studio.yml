@@ -22,7 +22,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # Le paquet SDK obsolète « tools » a été retiré du dépôt Google (sept. 2026)
+      # et faisait échouer setup-android en 12 s : on n'installe que platform-tools,
+      # AGP télécharge le reste tout seul.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
 
       - uses: gradle/actions/setup-gradle@v3
         with:
