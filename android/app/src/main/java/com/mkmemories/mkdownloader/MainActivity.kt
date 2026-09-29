@@ -178,6 +178,7 @@ class MainActivity : AppCompatActivity() {
         if (isAnalyste) setupAnalyse()
 
         Downloads.restore(this)          // recharge une file interrompue
+        Backup.restore(this)             // recharge une sauvegarde de chaîne en cours
         requestNotifPermission()
         handleShareIntent(intent)
         if (intent?.action != Intent.ACTION_SEND) loadHomeFeed()
@@ -315,6 +316,7 @@ class MainActivity : AppCompatActivity() {
         Downloads.onHistoryChanged = { if (ui.historyPane.isVisible) refreshHistory() }
         renderDownloads()
         Downloads.resumeIfNeeded(this)
+        Backup.pump(this)                // relance la sauvegarde de chaîne par lots
         bindMiniController()
     }
 
@@ -835,6 +837,7 @@ class MainActivity : AppCompatActivity() {
             toast(getString(R.string.upd_checking)); checkAppUpdate(force = true)
         }
         actions += getString(R.string.set_relay) to { startActivity(Intent(this, RelayActivity::class.java)) }
+        actions += (Backup.statusLabel(this) ?: getString(R.string.set_backup)) to { showBackupDialog() }
         actions += getString(R.string.set_update_engine) to { updateEngine() }
         actions += getString(R.string.set_logs) to {
             runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) }
@@ -842,6 +845,113 @@ class MainActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.set_title)
             .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    // ---------- 🗄 Sauvegarde de chaîne (archive complète) ----------
+
+    private fun showBackupDialog() {
+        if (Backup.active) { showBackupStatus(); return }
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val input = android.widget.EditText(this).apply {
+            hint = getString(R.string.bk_input_hint)
+            setSingleLine(true)
+        }
+        val msg = android.widget.TextView(this).apply {
+            text = getString(R.string.bk_input_msg)
+            setPadding(0, 0, 0, (8 * d).toInt())
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(msg)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.bk_title)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
+            .setPositiveButton(R.string.bk_analyze) { _, _ ->
+                val url = Backup.normalizeChannelUrl(input.text?.toString().orEmpty())
+                if (url.isNotBlank()) analyzeChannelForBackup(url)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun analyzeChannelForBackup(url: String) {
+        setBusy(true, R.string.bk_analyzing)
+        lifecycleScope.launch {
+            val result = runCatching { Backup.analyze(this@MainActivity, url) }
+            setBusy(false)
+            result.onSuccess { (name, entries) ->
+                if (entries.isEmpty()) toast(getString(R.string.bk_none))
+                else showBackupConfirm(name, entries)
+            }.onFailure { toast(it.message ?: getString(R.string.bk_none)) }
+        }
+    }
+
+    private fun showBackupConfirm(name: String, entries: List<Backup.Entry>) {
+        val qualities = listOf("mp4", "1080p", "720p").mapNotNull { id -> QUALITIES.find { it.id == id } }
+        var selected = 0
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val summary = android.widget.TextView(this)
+        fun refresh() {
+            summary.text = getString(
+                R.string.bk_summary,
+                entries.size,
+                Backup.fmtSize(Backup.freeBytes(this)),
+                Backup.fmtSize(Backup.estimateBytes(entries.size, qualities[selected])),
+            )
+        }
+        val radios = android.widget.RadioGroup(this)
+        qualities.forEachIndexed { i, q ->
+            radios.addView(
+                android.widget.RadioButton(this).apply {
+                    text = q.label
+                    id = android.view.View.generateViewId()
+                    isChecked = i == 0
+                    setOnClickListener { selected = i; refresh() }
+                },
+            )
+        }
+        refresh()
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(summary)
+            addView(radios)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(name)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
+            .setPositiveButton(R.string.bk_start) { _, _ ->
+                val todo = Backup.start(this, name, entries, qualities[selected])
+                toast(
+                    if (todo == 0) getString(R.string.bk_all_done)
+                    else getString(R.string.bk_started, todo),
+                )
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun showBackupStatus() {
+        val msg = getString(
+            R.string.bk_status_msg,
+            Backup.doneCount, Backup.totalCount,
+            Backup.fmtSize(Backup.freeBytes(this)),
+        ) + (if (Backup.pausedForSpace) getString(R.string.bk_status_paused_line) else "")
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.bk_title)
+            .setMessage(msg)
+            .setPositiveButton(R.string.bk_resume) { _, _ -> Backup.pump(this) }
+            .setNeutralButton(R.string.bk_stop) { _, _ ->
+                Backup.cancel(this)
+                toast(getString(R.string.bk_stopped))
+            }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }

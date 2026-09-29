@@ -37,6 +37,7 @@ object Downloads {
         val startSec: Int? = null,
         val endSec: Int? = null,
         val recordSeconds: Int? = null,   // enregistrement d'un direct : durée d'une tranche
+        val backupDir: String? = null,    // 🗄 sauvegarde de chaîne : sous-dossier d'archive
         var status: Status = Status.QUEUED,
         var percent: Int = -1,
         var error: String? = null,
@@ -93,6 +94,17 @@ object Downloads {
         endSec: Int? = null,
     ): Job {
         val job = Job(newId(), item, quality, startSec, endSec)
+        jobsList.add(job)
+        persist(context)
+        DownloadService.start(context.applicationContext)
+        kick(context.applicationContext)
+        notifyAll()
+        return job
+    }
+
+    /** Ajoute une vidéo de SAUVEGARDE de chaîne (archive complète structurée). */
+    fun startBackup(context: Context, item: VideoItem, quality: Quality, backupDir: String): Job {
+        val job = Job(newId(), item, quality, backupDir = backupDir)
         jobsList.add(job)
         persist(context)
         DownloadService.start(context.applicationContext)
@@ -228,6 +240,8 @@ object Downloads {
                                     if (!job.canceled) { job.status = Status.ERROR; job.error = cleanError(e) }
                                 }
                                 if (!job.canceled) { persist(app); notifyAll() }
+                                // 🗄 La sauvegarde de chaîne remplit la file par lots.
+                                if (job.backupDir != null) runCatching { Backup.pump(app) }
                             }
                         }
                     }
@@ -253,6 +267,7 @@ object Downloads {
         try {
             workDir.mkdirs()
             val recording = (job.recordSeconds ?: 0) > 0
+            val backup = job.backupDir != null
             val sectioned = !recording && job.startSec != null && job.endSec != null && job.endSec > job.startSec
             val request = YoutubeDLRequest(item.url).apply {
                 addOption("--no-playlist")
@@ -307,14 +322,26 @@ object Downloads {
                     addOption("--download-sections", "*${job.startSec}-${job.endSec}")
                     addOption("--force-keyframes-at-cuts")
                 }
-                addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
+                if (backup) {
+                    // 🗄 Archive structurée : vignette + description + tags/métadonnées
+                    // en fichiers séparés, noms triables par date : « date - titre [id] ».
+                    addOption("--write-thumbnail")
+                    addOption("--convert-thumbnails", "jpg")
+                    addOption("--write-description")
+                    addOption("--write-info-json")
+                    addOption("--no-write-playlist-metafiles")
+                    addOption("-o", "${workDir.absolutePath}/%(upload_date)s - %(title).110B [%(id)s].%(ext)s")
+                } else {
+                    addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
+                }
             }
             YoutubeDL.getInstance().execute(request, job.id) { p, _, _ ->
                 onProgress(if (p in 0f..100f) p.toInt() else -1)
             }
             val produced = workDir.listFiles()?.maxByOrNull { it.length() }
                 ?: error("Le téléchargement n'a produit aucun fichier.")
-            val uri = exportToDownloads(app, produced, quality.audioMp3)
+            val uri = if (job.backupDir != null) exportBackup(app, workDir, job.backupDir)
+            else exportToDownloads(app, produced, quality.audioMp3)
             History.add(
                 app,
                 HistoryEntry(
@@ -342,11 +369,50 @@ object Downloads {
         else exportLegacy(context, file, subDir)
     }
 
+    /**
+     * 🗄 Exporte TOUS les fichiers produits (vidéo, vignette .jpg, .description,
+     * .info.json) vers Téléchargements/MKDownloader/Sauvegarde/<chaîne>/.
+     * Renvoie l'uri du fichier vidéo (le plus gros).
+     */
+    private fun exportBackup(context: Context, workDir: File, dir: String): String {
+        val subDir = "MKDownloader/Sauvegarde/$dir"
+        val files = workDir.listFiles()?.filter { !it.name.endsWith(".part") }.orEmpty()
+        val video = files.maxByOrNull { it.length() } ?: error("Aucun fichier produit.")
+        var mainUri = ""
+        files.forEach { f ->
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                exportViaMediaStore(context, f, subDir, mimeOf(f.name))
+            } else {
+                exportLegacy(context, f, subDir)
+            }
+            if (f == video) mainUri = uri
+        }
+        return mainUri
+    }
+
+    private fun mimeOf(name: String): String {
+        val n = name.lowercase()
+        return when {
+            n.endsWith(".mp4") || n.endsWith(".m4v") -> "video/mp4"
+            n.endsWith(".webm") -> "video/webm"
+            n.endsWith(".mkv") -> "video/x-matroska"
+            n.endsWith(".jpg") || n.endsWith(".jpeg") -> "image/jpeg"
+            n.endsWith(".png") -> "image/png"
+            n.endsWith(".webp") -> "image/webp"
+            n.endsWith(".json") -> "application/json"
+            n.endsWith(".description") || n.endsWith(".txt") -> "text/plain"
+            n.endsWith(".mp3") -> "audio/mpeg"
+            n.endsWith(".m4a") -> "audio/mp4"
+            else -> "application/octet-stream"
+        }
+    }
+
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
-    private fun exportViaMediaStore(context: Context, file: File, subDir: String): String {
+    private fun exportViaMediaStore(context: Context, file: File, subDir: String, mime: String? = null): String {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + subDir)
+            if (mime != null) put(MediaStore.MediaColumns.MIME_TYPE, mime)
         }
         val uri: Uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             ?: error("Impossible d'écrire dans Téléchargements")
@@ -382,6 +448,7 @@ object Downloads {
                     put("q", j.quality.id)
                     put("start", j.startSec ?: JSONObject.NULL)
                     put("end", j.endSec ?: JSONObject.NULL)
+                    put("bdir", j.backupDir ?: JSONObject.NULL)
                     put("status", j.status.name)
                     put("error", j.error ?: JSONObject.NULL)
                 }
@@ -413,6 +480,7 @@ object Downloads {
                         quality = quality,
                         startSec = if (o.isNull("start")) null else o.optInt("start"),
                         endSec = if (o.isNull("end")) null else o.optInt("end"),
+                        backupDir = if (o.isNull("bdir")) null else o.optStringOrNull("bdir"),
                         status = status,
                         error = if (o.isNull("error")) null else o.optStringOrNull("error"),
                     )
