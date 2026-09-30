@@ -876,9 +876,106 @@ class MainActivity : AppCompatActivity() {
                 val url = Backup.normalizeChannelUrl(input.text?.toString().orEmpty())
                 if (url.isNotBlank()) analyzeChannelForBackup(url)
             }
-            .setNeutralButton(R.string.bk_fiches) { _, _ -> generateFiches() }
+            .setNeutralButton(R.string.bk_reuse) { _, _ -> showReuseChooser() }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    /** Choix du mode de réutilisation des métadonnées archivées. */
+    private fun showReuseChooser() {
+        val options = arrayOf(
+            getString(R.string.bk_rep_mode),
+            getString(R.string.bk_fiches_txt),
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.bk_reuse)
+            .setItems(options) { _, i ->
+                if (i == 0) showRepublishAssistant() else generateFiches()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * 📤 Assistant de republication : dossier → liste des vidéos → FICHE par
+     * vidéo avec boutons de copie dédiés (titre / tags / description), marquage
+     * « ✔ Republiée » et enchaînement sur la suivante.
+     */
+    private fun showRepublishAssistant() {
+        setBusy(true, R.string.bk_rep_loading)
+        lifecycleScope.launch {
+            val result = runCatching { Backup.fichesByFolder(this@MainActivity) }
+            setBusy(false)
+            result.onSuccess { map ->
+                if (map.isEmpty()) { toast(getString(R.string.bk_fiches_none)); return@onSuccess }
+                val folders = map.keys.toList()
+                val labels = folders.map { fo ->
+                    val l = map.getValue(fo)
+                    val done = l.count { Backup.isRepublished(this@MainActivity, fo, it.vid) }
+                    "$fo — $done/${l.size} ✔"
+                }
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle(R.string.bk_rep_folders_title)
+                    .setItems(labels.toTypedArray()) { _, i ->
+                        showRepublishList(folders[i], map.getValue(folders[i]))
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+            }.onFailure { toast(it.message ?: getString(R.string.bk_fiches_none)) }
+        }
+    }
+
+    private fun showRepublishList(folder: String, list: List<Backup.Fiche>) {
+        val labels = list.map {
+            (if (Backup.isRepublished(this, folder, it.vid)) "✔ " else "◻ ") + it.name
+        }
+        val done = list.count { Backup.isRepublished(this, folder, it.vid) }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.bk_rep_list_title, folder, done, list.size))
+            .setItems(labels.toTypedArray()) { _, i -> showFicheSheet(folder, list, i) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** La fiche d'une vidéo : belle feuille avec boutons de copie dédiés. */
+    private fun showFicheSheet(folder: String, list: List<Backup.Fiche>, index: Int) {
+        if (index !in list.indices) { toast(getString(R.string.bk_rep_last)); return }
+        val f = list[index]
+        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val b = com.mkmemories.mkdownloader.databinding.SheetFicheBinding.inflate(layoutInflater)
+        sheet.setContentView(b.root)
+        sheet.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+
+        val done = Backup.isRepublished(this, folder, f.vid)
+        b.fichePos.text = getString(R.string.bk_fiche_pos, index + 1, list.size) +
+            (if (done) "   ✔ republiée" else "")
+        b.ficheName.text = f.name
+        b.ficheMeta.text = listOf(f.date, f.url).filter { it.isNotBlank() }.joinToString("   ·   ")
+        b.ficheTitle.text = f.title
+        val tagsText = f.tags.joinToString(", ")
+        b.ficheTags.text = tagsText.ifBlank { getString(R.string.bk_no_tags) }
+        b.ficheDesc.text = f.description.ifBlank { "(vide)" }
+
+        fun copy(label: String, value: String) {
+            val cm = getSystemService(android.content.ClipboardManager::class.java)
+            cm.setPrimaryClip(android.content.ClipData.newPlainText(label, value))
+            toast(getString(R.string.bk_copied, label))
+        }
+        b.copyTitle.setOnClickListener { copy(getString(R.string.bk_lbl_title), f.title) }
+        b.copyTags.setOnClickListener { copy(getString(R.string.bk_lbl_tags), tagsText) }
+        b.copyDesc.setOnClickListener { copy(getString(R.string.bk_lbl_desc), f.description) }
+
+        b.fichePrev.isEnabled = index > 0
+        b.fichePrev.setOnClickListener { sheet.dismiss(); showFicheSheet(folder, list, index - 1) }
+        b.ficheNext.isEnabled = index < list.size - 1
+        b.ficheNext.setOnClickListener { sheet.dismiss(); showFicheSheet(folder, list, index + 1) }
+        b.ficheDone.text = getString(if (done) R.string.bk_rep_undone else R.string.bk_rep_done_next)
+        b.ficheDone.setOnClickListener {
+            Backup.setRepublished(this, folder, f.vid, !done)
+            sheet.dismiss()
+            showFicheSheet(folder, list, if (!done) index + 1 else index)
+        }
+        sheet.show()
     }
 
     /**

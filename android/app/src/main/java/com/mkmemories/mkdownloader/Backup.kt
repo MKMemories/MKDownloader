@@ -276,15 +276,40 @@ object Backup {
 
     // ---------- 📋 Fiches : titres + tags + descriptions en clair ----------
 
-    private data class Fiche(
+    data class Fiche(
         val folder: String,        // relatif sous Sauvegarde/ (« Chaîne » ou « Chaîne/Playlist »)
         val name: String,          // nom du fichier vidéo (sans .info.json)
+        val vid: String,           // identifiant YouTube de la vidéo
         val title: String,
         val date: String,
         val url: String,
         val tags: List<String>,
         val description: String,
     )
+
+    /** Fiches groupées par dossier d\u0027archive, triées (ordre des playlists). */
+    suspend fun fichesByFolder(context: Context): Map<String, List<Fiche>> =
+        withContext(Dispatchers.IO) {
+            readAllInfoJson(context.applicationContext)
+                .groupBy { it.folder }
+                .mapValues { (_, l) -> l.sortedBy { it.name } }
+                .toSortedMap()
+        }
+
+    // ---------- Suivi de republication (vidéo par vidéo) ----------
+
+    private const val REP_PREFS = "mkdl_republish"
+
+    fun isRepublished(context: Context, folder: String, vid: String): Boolean =
+        context.getSharedPreferences(REP_PREFS, Context.MODE_PRIVATE)
+            .getStringSet("done", emptySet())!!.contains("$folder|$vid")
+
+    fun setRepublished(context: Context, folder: String, vid: String, on: Boolean) {
+        val p = context.getSharedPreferences(REP_PREFS, Context.MODE_PRIVATE)
+        val set = HashSet(p.getStringSet("done", emptySet())!!)
+        if (on) set.add("$folder|$vid") else set.remove("$folder|$vid")
+        p.edit().putStringSet("done", set).apply()
+    }
 
     /**
      * Compile toutes les métadonnées archivées (.info.json) en fichiers TEXTE
@@ -346,6 +371,7 @@ object Backup {
                 out += Fiche(
                     folder = folder,
                     name = fileName.removeSuffix(".info.json"),
+                    vid = o.optString("id"),
                     title = o.optString("title"),
                     date = date,
                     url = o.optString("webpage_url")
