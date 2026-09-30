@@ -876,8 +876,57 @@ class MainActivity : AppCompatActivity() {
                 val url = Backup.normalizeChannelUrl(input.text?.toString().orEmpty())
                 if (url.isNotBlank()) analyzeChannelForBackup(url)
             }
+            .setNeutralButton(R.string.bk_fiches) { _, _ -> generateFiches() }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    /**
+     * 📋 Compile titres + tags + descriptions de TOUTE l'archive en fichiers
+     * texte lisibles (_FICHES.txt par dossier + global), faits pour le
+     * copier-coller lors du re-upload.
+     */
+    private fun generateFiches() {
+        setBusy(true, R.string.bk_fiches_building)
+        lifecycleScope.launch {
+            val result = runCatching { Backup.generateIndex(this@MainActivity) }
+            setBusy(false)
+            result.onSuccess { (count, uri) ->
+                if (count == 0 || uri == null) {
+                    toast(getString(R.string.bk_fiches_none))
+                } else {
+                    MaterialAlertDialogBuilder(this@MainActivity)
+                        .setTitle(R.string.bk_fiches_done_title)
+                        .setMessage(getString(R.string.bk_fiches_done, count))
+                        .setPositiveButton(R.string.bk_fiches_open) { _, _ ->
+                            runCatching {
+                                startActivity(
+                                    Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(Uri.parse(uri), "text/plain")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    },
+                                )
+                            }.onFailure { toast(getString(R.string.bk_fiches_open_fallback)) }
+                        }
+                        .setNeutralButton(R.string.bk_fiches_share) { _, _ ->
+                            runCatching {
+                                startActivity(
+                                    Intent.createChooser(
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_STREAM, Uri.parse(uri))
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        },
+                                        getString(R.string.bk_fiches_share),
+                                    ),
+                                )
+                            }
+                        }
+                        .setNegativeButton(R.string.cancel, null)
+                        .show()
+                }
+            }.onFailure { toast(it.message ?: getString(R.string.bk_fiches_none)) }
+        }
     }
 
     private fun analyzeChannelForBackup(url: String) {

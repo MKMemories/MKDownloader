@@ -274,6 +274,175 @@ object Backup {
         return found
     }
 
+    // ---------- 📋 Fiches : titres + tags + descriptions en clair ----------
+
+    private data class Fiche(
+        val folder: String,        // relatif sous Sauvegarde/ (« Chaîne » ou « Chaîne/Playlist »)
+        val name: String,          // nom du fichier vidéo (sans .info.json)
+        val title: String,
+        val date: String,
+        val url: String,
+        val tags: List<String>,
+        val description: String,
+    )
+
+    /**
+     * Compile toutes les métadonnées archivées (.info.json) en fichiers TEXTE
+     * lisibles, faits pour le copier-coller lors du re-upload :
+     * « _FICHES.txt » dans chaque dossier + « _FICHES - tout.txt » à la racine.
+     * Tags au format champ YouTube (séparés par des virgules).
+     * Renvoie (nombre de fiches, uri du fichier global).
+     */
+    suspend fun generateIndex(context: Context): Pair<Int, String?> =
+        withContext(Dispatchers.IO) {
+            val app = context.applicationContext
+            val fiches = readAllInfoJson(app)
+            if (fiches.isEmpty()) return@withContext 0 to null
+            val byFolder = fiches.groupBy { it.folder }.toSortedMap()
+            val global = StringBuilder()
+            global.append("📋 FICHES DE L\u0027ARCHIVE — ${fiches.size} vidéos\n")
+            global.append("Titre, tags (à coller tels quels dans YouTube) et description de chaque vidéo.\n")
+            byFolder.forEach { (folder, list) ->
+                val sorted = list.sortedBy { it.name }
+                val local = StringBuilder()
+                local.append("📋 FICHES — $folder (${sorted.size} vidéos)\n")
+                local.append("Tags prêts à coller dans YouTube (séparés par des virgules).\n")
+                sorted.forEach { local.append(ficheBlock(it)) }
+                writeTextFile(app, "MKDownloader/Sauvegarde/$folder", "_FICHES.txt", local.toString())
+                global.append("\n\n██████████ DOSSIER : $folder (${sorted.size} vidéos) ██████████\n")
+                sorted.forEach { global.append(ficheBlock(it)) }
+            }
+            val uri = writeTextFile(app, "MKDownloader/Sauvegarde", "_FICHES - tout.txt", global.toString())
+            fiches.size to uri
+        }
+
+    private fun ficheBlock(f: Fiche): String = buildString {
+        append("\n────────────────────────────────────────\n")
+        append("🎬 ").append(f.name).append("\n\n")
+        append("TITRE :\n").append(f.title).append("\n\n")
+        append("DATE : ").append(f.date)
+        if (f.url.isNotBlank()) append("    LIEN D\u0027ORIGINE : ").append(f.url)
+        append("\n\n")
+        append("TAGS (copier-coller tel quel) :\n")
+        append(if (f.tags.isEmpty()) "(aucun)" else f.tags.joinToString(", "))
+        append("\n\n")
+        append("DESCRIPTION (copier-coller) :\n")
+        append(f.description.ifBlank { "(vide)" })
+        append("\n")
+    }
+
+    /** Lit tous les .info.json de l\u0027archive (MediaStore sur Android 10+, fichiers sinon). */
+    private fun readAllInfoJson(context: Context): List<Fiche> {
+        val out = mutableListOf<Fiche>()
+        fun parse(folder: String, fileName: String, text: String) {
+            runCatching {
+                val o = JSONObject(text)
+                val tags = mutableListOf<String>()
+                o.optJSONArray("tags")?.let { for (i in 0 until it.length()) tags += it.optString(i) }
+                val rawDate = o.optString("upload_date")
+                val date = if (rawDate.length == 8) {
+                    "${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}"
+                } else rawDate
+                out += Fiche(
+                    folder = folder,
+                    name = fileName.removeSuffix(".info.json"),
+                    title = o.optString("title"),
+                    date = date,
+                    url = o.optString("webpage_url")
+                        .ifBlank { o.optString("id").takeIf { it.isNotBlank() }?.let { "https://youtu.be/$it" } ?: "" },
+                    tags = tags.filter { it.isNotBlank() },
+                    description = o.optString("description"),
+                )
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                context.contentResolver.query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    arrayOf(
+                        MediaStore.MediaColumns._ID,
+                        MediaStore.MediaColumns.DISPLAY_NAME,
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                    ),
+                    "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                    arrayOf("%MKDownloader/Sauvegarde/%", "%.info.json"),
+                    null,
+                )?.use { c ->
+                    val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                    val nameCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val pathCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+                    while (c.moveToNext()) {
+                        val uri = android.content.ContentUris.withAppendedId(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(idCol),
+                        )
+                        val folder = (c.getString(pathCol) ?: "")
+                            .substringAfter("Sauvegarde/", "").trim('/')
+                        val text = runCatching {
+                            context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+                        }.getOrNull() ?: continue
+                        parse(folder.ifBlank { "(racine)" }, c.getString(nameCol) ?: "", text)
+                    }
+                }
+            }
+        } else {
+            val base = File(
+                context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                "MKDownloader/Sauvegarde",
+            )
+            base.walkTopDown().filter { it.isFile && it.name.endsWith(".info.json") }.forEach { f ->
+                val folder = f.parentFile?.relativeTo(base)?.path.orEmpty().ifBlank { "(racine)" }
+                runCatching { parse(folder, f.name, f.readText()) }
+            }
+        }
+        return out
+    }
+
+    /** Écrit (en remplaçant) un fichier texte dans Téléchargements/<subDir>/. */
+    private fun writeTextFile(context: Context, subDir: String, name: String, text: String): String? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            return runCatching {
+                val resolver = context.contentResolver
+                // Supprime l\u0027ancienne version (sinon MediaStore crée « (1) »).
+                resolver.query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                    arrayOf("%$subDir%", name),
+                    null,
+                )?.use { c ->
+                    val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                    while (c.moveToNext()) {
+                        runCatching {
+                            resolver.delete(
+                                android.content.ContentUris.withAppendedId(
+                                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(idCol),
+                                ),
+                                null, null,
+                            )
+                        }
+                    }
+                }
+                val values = android.content.ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + subDir)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                }
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: return@runCatching null
+                resolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                uri.toString()
+            }.getOrNull()
+        } else {
+            return runCatching {
+                val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), subDir)
+                dir.mkdirs()
+                val f = File(dir, name)
+                f.writeText(text)
+                android.net.Uri.fromFile(f).toString()
+            }.getOrNull()
+        }
+    }
+
     /** Version publique (pour préparer les sous-dossiers de playlists). */
     fun sanitizeName(name: String) = sanitize(name)
 

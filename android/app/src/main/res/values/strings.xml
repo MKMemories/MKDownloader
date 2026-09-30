@@ -247,6 +247,14 @@
     <string name="bk_all_done">Tout est déjà archivé ✔</string>
     <string name="bk_status_msg">Vidéos archivées : %1$d/%2$d\nEspace libre : %3$s\n\nDossier : Téléchargements/MKDownloader/Sauvegarde/</string>
     <string name="bk_status_paused_line">\n\n⚠ EN PAUSE : moins de 3 Go libres. Libère de l\'espace (ou copie l\'archive sur un PC/clé USB), puis « Reprendre ».</string>
+    <string name="bk_fiches">📋 Fiches (titres+tags+descriptions)</string>
+    <string name="bk_fiches_building">Compilation des fiches…</string>
+    <string name="bk_fiches_none">Aucune vidéo archivée trouvée — lance d\'abord une sauvegarde.</string>
+    <string name="bk_fiches_done_title">Fiches générées</string>
+    <string name="bk_fiches_done">%1$d fiches compilées :\n\n• _FICHES.txt dans CHAQUE dossier (chaîne et playlists)\n• _FICHES - tout.txt à la racine de Sauvegarde/\n\nChaque fiche : TITRE, DATE, lien d\'origine, TAGS (séparés par des virgules, prêts à coller dans YouTube) et DESCRIPTION. Ouvre le fichier, sélectionne, copie-colle.</string>
+    <string name="bk_fiches_open">Ouvrir</string>
+    <string name="bk_fiches_share">Partager</string>
+    <string name="bk_fiches_open_fallback">Ouvre _FICHES - tout.txt avec l\'app Fichiers (Téléchargements/MKDownloader/Sauvegarde).</string>
     <string name="bk_resume">Reprendre</string>
     <string name="bk_stop">Arrêter</string>
     <string name="bk_stopped">Sauvegarde arrêtée.</string>
