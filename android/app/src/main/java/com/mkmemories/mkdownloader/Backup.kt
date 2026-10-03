@@ -424,7 +424,13 @@ object Backup {
     }
 
     /** Écrit (en remplaçant) un fichier texte dans Téléchargements/<subDir>/. */
-    private fun writeTextFile(context: Context, subDir: String, name: String, text: String): String? {
+    internal fun writeTextFile(
+        context: Context,
+        subDir: String,
+        name: String,
+        text: String,
+        mime: String = "text/plain",
+    ): String? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return runCatching {
                 val resolver = context.contentResolver
@@ -451,7 +457,7 @@ object Backup {
                 val values = android.content.ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, name)
                     put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + subDir)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
                 }
                 val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: return@runCatching null

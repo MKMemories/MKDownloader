@@ -1045,20 +1045,101 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Choix : toute la chaîne, ou PAR PLAYLISTS (pour recréer des chaînes thématiques). */
+    /** Choix : toute la chaîne, PAR PLAYLISTS, ou catalogue seul (sans téléchargement). */
     private fun showBackupModeChoice(channelUrl: String, name: String, all: List<Backup.Entry>) {
         val options = arrayOf(
             getString(R.string.bk_mode_all, all.size),
             getString(R.string.bk_mode_playlists),
+            getString(R.string.bk_mode_catalog),
         )
         MaterialAlertDialogBuilder(this)
             .setTitle(name)
             .setItems(options) { _, i ->
-                if (i == 0) showBackupConfirm(name, all)
-                else loadPlaylistsForBackup(channelUrl, name)
+                when (i) {
+                    0 -> showBackupConfirm(name, all)
+                    1 -> loadPlaylistsForBackup(channelUrl, name)
+                    else -> showCatalogConfirm(name, all)
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    // ---------- 📇 Catalogue de chaîne (liens + infos, sans téléchargement) ----------
+
+    private fun showCatalogConfirm(name: String, entries: List<Backup.Entry>) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.cat_title, name))
+            .setMessage(getString(R.string.cat_confirm_msg, entries.size))
+            .setPositiveButton(R.string.cat_start) { _, _ -> runCatalog(name, entries) }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun runCatalog(name: String, entries: List<Backup.Entry>) {
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val label = android.widget.TextView(this).apply {
+            text = getString(R.string.cat_running, 0, entries.size, "")
+        }
+        val bar = android.widget.ProgressBar(
+            this, null, android.R.attr.progressBarStyleHorizontal,
+        ).apply { max = entries.size }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(label)
+            addView(bar)
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.cat_title, name))
+            .setView(box)
+            .setCancelable(false)
+            .setNegativeButton(R.string.cancel) { _, _ -> Catalog.stopRequested = true }
+            .show()
+        lifecycleScope.launch {
+            val result = runCatching {
+                Catalog.build(this@MainActivity, name, entries) { done, total, title ->
+                    runOnUiThread {
+                        bar.progress = done
+                        label.text = getString(R.string.cat_running, done, total, title.take(60))
+                    }
+                }
+            }
+            dialog.dismiss()
+            result.onSuccess { r ->
+                if (r.count == 0) { toast(getString(R.string.bk_none)); return@onSuccess }
+                val builder = MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle(R.string.cat_done_title)
+                    .setMessage(
+                        (if (r.cancelled) getString(R.string.cat_stopped) + "\n\n" else "") +
+                            getString(R.string.cat_done_msg, r.count, r.errors, r.folder),
+                    )
+                    .setNegativeButton(R.string.close, null)
+                r.csvUri?.let { uri ->
+                    builder.setPositiveButton(R.string.cat_share_csv) { _, _ ->
+                        runCatching {
+                            startActivity(
+                                android.content.Intent.createChooser(
+                                    android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/csv"
+                                        putExtra(
+                                            android.content.Intent.EXTRA_STREAM,
+                                            android.net.Uri.parse(uri),
+                                        )
+                                        addFlags(
+                                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                                        )
+                                    },
+                                    getString(R.string.cat_share_csv),
+                                ),
+                            )
+                        }
+                    }
+                }
+                builder.show()
+            }.onFailure { toast(it.message ?: getString(R.string.bk_none)) }
+        }
     }
 
     private fun loadPlaylistsForBackup(channelUrl: String, name: String) {
