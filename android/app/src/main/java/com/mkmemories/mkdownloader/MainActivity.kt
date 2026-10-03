@@ -1113,16 +1113,16 @@ class MainActivity : AppCompatActivity() {
                     .setTitle(R.string.cat_done_title)
                     .setMessage(
                         (if (r.cancelled) getString(R.string.cat_stopped) + "\n\n" else "") +
-                            getString(R.string.cat_done_msg, r.count, r.errors, r.folder),
+                            getString(R.string.cat_done_msg, r.count, r.errors, r.zipName),
                     )
                     .setNegativeButton(R.string.close, null)
-                r.csvUri?.let { uri ->
-                    builder.setPositiveButton(R.string.cat_share_csv) { _, _ ->
+                r.zipUri?.let { uri ->
+                    builder.setPositiveButton(R.string.cat_share_zip) { _, _ ->
                         runCatching {
                             startActivity(
                                 android.content.Intent.createChooser(
                                     android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/csv"
+                                        type = "application/zip"
                                         putExtra(
                                             android.content.Intent.EXTRA_STREAM,
                                             android.net.Uri.parse(uri),
@@ -1131,7 +1131,7 @@ class MainActivity : AppCompatActivity() {
                                             android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
                                         )
                                     },
-                                    getString(R.string.cat_share_csv),
+                                    getString(R.string.cat_share_zip),
                                 ),
                             )
                         }

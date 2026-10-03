@@ -238,13 +238,13 @@
     <string name="bk_mode_playlists">🗂 Par playlists (recréer des chaînes thématiques)</string>
     <string name="bk_mode_catalog">📇 Catalogue seul : liens + infos, sans télécharger</string>
     <string name="cat_title">📇 Catalogue — %1$s</string>
-    <string name="cat_confirm_msg">%1$d vidéos.\n\nPour chaque vidéo, le catalogue extrait : lien, titre, description, date de mise en ligne, tags et lien de la vignette — SANS télécharger les vidéos.\n\nFichiers créés dans Téléchargements/MKDownloader/Catalogue/ :\n• catalogue.csv — tableur (Excel)\n• catalogue.json — pour tes sites web\n• catalogue.html — galerie prête à coller\n\nCompte 1 à 2 secondes par vidéo : garde l\'app ouverte, écran allumé.</string>
+    <string name="cat_confirm_msg">%1$d vidéos.\n\nPour chaque vidéo, le catalogue extrait : lien, titre, description, date de mise en ligne, tags et lien de la vignette — SANS télécharger les vidéos.\n\nRésultat : UN fichier ZIP dans Téléchargements/MKDownloader/Catalogue/, contenant :\n• LISEZMOI.txt — explication du contenu\n• catalogue.csv — tableur (Excel)\n• catalogue.json — pour tes sites web\n• catalogue.html — galerie prête à coller\n\nCompte 1 à 2 secondes par vidéo : garde l\'app ouverte, écran allumé.</string>
     <string name="cat_start">Générer</string>
     <string name="cat_running">%1$d / %2$d vidéos\n%3$s</string>
     <string name="cat_done_title">📇 Catalogue généré</string>
     <string name="cat_stopped">⏸ Interrompu — catalogue partiel écrit.</string>
-    <string name="cat_done_msg">%1$d fiches extraites (%2$d en échec).\n\nFichiers dans Téléchargements/MKDownloader/Catalogue/%3$s/ :\n• catalogue.csv — à ouvrir dans Excel/Sheets\n• catalogue.json — intégration site web\n• catalogue.html — galerie de vignettes cliquables, prête à coller dans une page</string>
-    <string name="cat_share_csv">Partager le CSV</string>
+    <string name="cat_done_msg">%1$d fiches extraites (%2$d en échec).\n\nZip : Téléchargements/MKDownloader/Catalogue/%3$s\n\nContenu (détaillé dans le LISEZMOI.txt du zip) :\n• catalogue.csv — à ouvrir dans Excel/Sheets\n• catalogue.json — intégration site web\n• catalogue.html — galerie de vignettes cliquables, prête à coller dans une page</string>
+    <string name="cat_share_zip">Partager le ZIP</string>
     <string name="bk_pl_loading">Récupération des playlists…</string>
     <string name="bk_pl_none">Aucune playlist trouvée (publiques uniquement — connecte ton compte YouTube dans ⚙ Comptes pour les autres).</string>
     <string name="bk_pl_pick_title">Playlists à archiver (%1$d)</string>

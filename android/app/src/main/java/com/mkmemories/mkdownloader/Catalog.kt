@@ -14,13 +14,15 @@ import org.json.JSONObject
  * vignette — SANS télécharger les vidéos. Pensé pour référencer les vidéos sur
  * un site web (creteimmersion.com, tounesna.org…).
  *
- * Produit dans Téléchargements/MKDownloader/Catalogue/<chaîne>/ :
+ * Produit UN SEUL fichier : Téléchargements/MKDownloader/Catalogue/
+ * « Catalogue - <chaîne>.zip », contenant :
+ *  • LISEZMOI.txt   — explication du contenu du zip ;
  *  • catalogue.csv  — tableur (séparateur « ; », compatible Excel français) ;
  *  • catalogue.json — intégration dans un site (tableau d'objets) ;
  *  • catalogue.html — galerie prête à coller (vignette cliquable + titre + date).
  *
- * Les fichiers sont réécrits toutes les 25 vidéos : une extraction interrompue
- * laisse quand même un catalogue partiel utilisable.
+ * Le zip est réécrit toutes les 25 vidéos : une extraction interrompue laisse
+ * quand même un catalogue partiel utilisable.
  */
 object Catalog {
 
@@ -38,11 +40,11 @@ object Catalog {
     )
 
     data class Result(
-        val folder: String,        // sous-dossier sous Catalogue/
+        val zipName: String,       // nom du zip sous Catalogue/
         val count: Int,            // fiches extraites
         val errors: Int,           // vidéos en échec (privées, supprimées…)
         val cancelled: Boolean,
-        val csvUri: String?,       // pour le bouton Partager
+        val zipUri: String?,       // pour le bouton Partager
     )
 
     /** Demande d'arrêt (le fichier partiel est écrit avant de rendre la main). */
@@ -64,17 +66,17 @@ object Catalog {
         val app = context.applicationContext
         Engine.ensureReady(app)
         stopRequested = false
-        val folder = Backup.sanitizeName(channelName)
+        val zipName = "Catalogue - " + Backup.sanitizeName(channelName) + ".zip"
         val rows = mutableListOf<Row>()
         var errors = 0
-        var csvUri: String? = null
+        var zipUri: String? = null
 
-        fun flush() {
+        fun flush(partial: Boolean) {
             if (rows.isEmpty()) return
-            val dir = "MKDownloader/Catalogue/$folder"
-            csvUri = Backup.writeTextFile(app, dir, "catalogue.csv", toCsv(rows), "text/csv")
-            Backup.writeTextFile(app, dir, "catalogue.json", toJson(rows), "application/json")
-            Backup.writeTextFile(app, dir, "catalogue.html", toHtml(channelName, rows), "text/html")
+            val bytes = zipBytes(channelName, rows, errors, partial)
+            zipUri = Backup.writeBinaryFile(
+                app, "MKDownloader/Catalogue", zipName, bytes, "application/zip",
+            )
         }
 
         for ((i, e) in entries.withIndex()) {
@@ -82,11 +84,11 @@ object Catalog {
             onProgress(i, entries.size, e.title)
             val row = runCatching { fetchOne(app, e) }.getOrNull()
             if (row != null) rows += row else errors++
-            if (rows.size % FLUSH_EVERY == 0) flush()
+            if (rows.size % FLUSH_EVERY == 0) flush(partial = true)
         }
-        flush()
+        flush(partial = stopRequested)
         onProgress(entries.size, entries.size, "")
-        Result(folder, rows.size, errors, stopRequested, csvUri)
+        Result(zipName, rows.size, errors, stopRequested, zipUri)
     }
 
     /** Métadonnées complètes d'UNE vidéo (sans téléchargement). */
@@ -124,6 +126,67 @@ object Catalog {
     }
 
     // ---------- Formats de sortie ----------
+
+    /** Assemble le zip : LISEZMOI + csv + json + html. */
+    private fun zipBytes(
+        channelName: String,
+        rows: List<Row>,
+        errors: Int,
+        partial: Boolean,
+    ): ByteArray {
+        val buf = java.io.ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(buf).use { zip ->
+            fun put(name: String, content: String) {
+                zip.putNextEntry(java.util.zip.ZipEntry(name))
+                zip.write(content.toByteArray())
+                zip.closeEntry()
+            }
+            put("LISEZMOI.txt", readme(channelName, rows, errors, partial))
+            put("catalogue.csv", toCsv(rows))
+            put("catalogue.json", toJson(rows))
+            put("catalogue.html", toHtml(channelName, rows))
+        }
+        return buf.toByteArray()
+    }
+
+    /** Mode d'emploi du zip, en clair. */
+    private fun readme(
+        channelName: String,
+        rows: List<Row>,
+        errors: Int,
+        partial: Boolean,
+    ): String = buildString {
+        val now = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE)
+            .format(java.util.Date())
+        append("📇 CATALOGUE DE CHAÎNE YOUTUBE\n")
+        append("==============================\n\n")
+        append("Chaîne   : ").append(channelName).append("\n")
+        append("Généré le : ").append(now).append(" par MKDownloader\n")
+        append("Vidéos   : ").append(rows.size).append(" fiches")
+        if (errors > 0) append(" (").append(errors).append(" vidéos illisibles ignorées)")
+        append("\n")
+        if (partial) append("⚠ Extraction interrompue : ce catalogue est PARTIEL.\n")
+        append("\nPour chaque vidéo : lien YouTube, titre, description, date de mise en\n")
+        append("ligne, tags et lien de la vignette (image hébergée par YouTube, à\n")
+        append("utiliser directement dans une balise <img>).\n")
+        append("\nCONTENU DU ZIP\n")
+        append("--------------\n\n")
+        append("• catalogue.csv\n")
+        append("  Tableur, à ouvrir dans Excel, LibreOffice ou Google Sheets.\n")
+        append("  Séparateur « ; » (Excel français l'ouvre d'un double-clic).\n")
+        append("  Colonnes : Titre ; Lien ; Date ; Durée ; Vues ; Tags ; Vignette ;\n")
+        append("  Description.\n\n")
+        append("• catalogue.json\n")
+        append("  Le même contenu pour un site web ou un script : tableau d'objets\n")
+        append("  { id, titre, lien, date, duree_sec, vues, tags[], vignette,\n")
+        append("  description }.\n\n")
+        append("• catalogue.html\n")
+        append("  Galerie prête à l'emploi : vignettes cliquables (titre + date +\n")
+        append("  durée) qui ouvrent les vidéos sur YouTube. À coller tel quel dans\n")
+        append("  une page de site, ou à ouvrir dans un navigateur pour vérifier.\n\n")
+        append("Astuce : les liens de vignettes pointent vers les images officielles\n")
+        append("YouTube (i.ytimg.com) — rien à héberger de ton côté.\n")
+    }
 
     private fun fmtDuration(s: Long): String = when {
         s <= 0 -> ""

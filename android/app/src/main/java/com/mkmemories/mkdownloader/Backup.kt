@@ -430,6 +430,15 @@ object Backup {
         name: String,
         text: String,
         mime: String = "text/plain",
+    ): String? = writeBinaryFile(context, subDir, name, text.toByteArray(), mime)
+
+    /** Écrit (en remplaçant) un fichier BINAIRE dans Téléchargements/<subDir>/. */
+    internal fun writeBinaryFile(
+        context: Context,
+        subDir: String,
+        name: String,
+        bytes: ByteArray,
+        mime: String,
     ): String? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return runCatching {
@@ -461,7 +470,7 @@ object Backup {
                 }
                 val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: return@runCatching null
-                resolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                resolver.openOutputStream(uri)?.use { it.write(bytes) }
                 uri.toString()
             }.getOrNull()
         } else {
@@ -469,7 +478,7 @@ object Backup {
                 val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), subDir)
                 dir.mkdirs()
                 val f = File(dir, name)
-                f.writeText(text)
+                f.writeBytes(bytes)
                 android.net.Uri.fromFile(f).toString()
             }.getOrNull()
         }
