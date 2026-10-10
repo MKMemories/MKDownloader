@@ -88,6 +88,11 @@ class MainActivity : AppCompatActivity() {
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let { importCookiesFrom(it) } }
 
+    // ⛓ Import d'un plan de téléchargement (fichier texte structuré).
+    private val pickPlan = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { importPlanFrom(it) } }
+
     // Mini-lecteur : contrôleur média branché sur le service musical.
     private var miniControllerFuture: ListenableFuture<MediaController>? = null
     private var miniController: MediaController? = null
@@ -839,6 +844,7 @@ class MainActivity : AppCompatActivity() {
         actions += getString(R.string.set_relay) to { startActivity(Intent(this, RelayActivity::class.java)) }
         actions += (Backup.statusLabel(this) ?: getString(R.string.set_backup)) to { showBackupDialog() }
         actions += getString(R.string.ext_menu) to { showExtractsDialog() }
+        actions += getString(R.string.plan_menu) to { showPlanDialog() }
         actions += getString(R.string.set_update_engine) to { updateEngine() }
         actions += getString(R.string.set_logs) to {
             runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) }
@@ -846,6 +852,73 @@ class MainActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.set_title)
             .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    // ---------- ⛓ Plan de téléchargement (fichier structuré) ----------
+
+    private fun showPlanDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.plan_title)
+            .setMessage(R.string.plan_msg)
+            .setPositiveButton(R.string.plan_pick) { _, _ ->
+                runCatching { pickPlan.launch(arrayOf("text/*")) }
+                    .onFailure { toast(it.message ?: "?") }
+            }
+            .setNeutralButton(R.string.plan_model) { _, _ ->
+                val uri = Plan.writeTemplate(this)
+                if (uri == null) { toast(getString(R.string.bk_none)); return@setNeutralButton }
+                toast(getString(R.string.plan_model_done))
+                runCatching {
+                    startActivity(
+                        android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(uri))
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            },
+                            getString(R.string.plan_model),
+                        ),
+                    )
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun importPlanFrom(uri: android.net.Uri) {
+        val text = runCatching {
+            contentResolver.openInputStream(uri)?.use { input ->
+                val bytes = input.readBytes()
+                require(bytes.size <= 2 * 1024 * 1024) { "Fichier trop gros (2 Mo max)." }
+                bytes.decodeToString()
+            }
+        }.getOrNull()
+        if (text.isNullOrBlank()) { toast(getString(R.string.plan_unreadable)); return }
+        val parsed = Plan.parse(text)
+        if (parsed.items.isEmpty()) {
+            val detail = parsed.errors.take(6).joinToString("\n")
+            toast(getString(R.string.plan_empty) + if (detail.isBlank()) "" else "\n" + detail)
+            return
+        }
+        val summary = StringBuilder(
+            getString(
+                R.string.plan_confirm,
+                parsed.fullCount, parsed.clipCount, parsed.quality.label,
+            ),
+        )
+        if (parsed.errors.isNotEmpty()) {
+            summary.append("\n\n⚠ ").append(getString(R.string.plan_errors, parsed.errors.size))
+                .append("\n").append(parsed.errors.take(8).joinToString("\n"))
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.plan_title)
+            .setMessage(summary.toString())
+            .setPositiveButton(R.string.plan_launch) { _, _ ->
+                val n = Plan.launch(this, parsed)
+                toast(getString(R.string.plan_started, n))
+            }
             .setNegativeButton(R.string.cancel, null)
             .show()
     }

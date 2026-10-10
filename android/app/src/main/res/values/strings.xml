@@ -260,6 +260,20 @@
     <string name="ext_batch_running">Transcription %1$d / %2$d…</string>
     <string name="ext_batch_done">%1$d transcription(s) exportée(s), %2$d en échec.\n\nUn fichier .txt par vidéo — titre, URL, description puis transcription — dans Téléchargements/MKDownloader/Extraits/.</string>
     <string name="ext_share_files">Partager les .txt</string>
+
+    <!-- ⛓ Plan de téléchargement -->
+    <string name="plan_menu">⛓ Plan de téléchargement (fichier)</string>
+    <string name="plan_title">⛓ Plan de téléchargement</string>
+    <string name="plan_msg">Lance des téléchargements EN CHAÎNE depuis un fichier texte rempli à l\'avance : une ligne par vidéo — le lien seul pour la vidéo entière, ou « lien | 12:40-12:55 | … » pour des extraits — et une ligne « qualite: mp4/1080p/720p/max/mp3/flac » pour tout le plan.\n\n« Créer le modèle » écrit un fichier d\'exemple commenté dans Téléchargements/MKDownloader/ : remplis-le (téléphone ou ordinateur), puis reviens ici le choisir.</string>
+    <string name="plan_pick">📂 Choisir le fichier…</string>
+    <string name="plan_model">📄 Créer le modèle</string>
+    <string name="plan_model_done">Modèle écrit : Téléchargements/MKDownloader/« PLAN - modele a remplir.txt »</string>
+    <string name="plan_unreadable">Fichier illisible (texte attendu).</string>
+    <string name="plan_empty">Aucune ligne valide dans ce plan.</string>
+    <string name="plan_confirm">%1$d vidéo(s) entière(s) + %2$d extrait(s) à découper.\nQualité : %3$s.\n\nTout part dans la file de téléchargement habituelle (2 en parallèle, reprise en cas d\'échec).</string>
+    <string name="plan_errors">%1$d ligne(s) ignorée(s) :</string>
+    <string name="plan_launch">🚀 Lancer le plan</string>
+    <string name="plan_started">%1$d téléchargement(s) mis en file ⛓</string>
     <string name="bk_pl_loading">Récupération des playlists…</string>
     <string name="bk_pl_none">Aucune playlist trouvée (publiques uniquement — connecte ton compte YouTube dans ⚙ Comptes pour les autres).</string>
     <string name="bk_pl_pick_title">Playlists à archiver (%1$d)</string>
