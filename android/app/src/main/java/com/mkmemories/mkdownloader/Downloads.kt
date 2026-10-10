@@ -339,6 +339,12 @@ object Downloads {
                     addOption("--no-write-playlist-metafiles")
                     val prefix = job.backupPrefix.orEmpty()
                     addOption("-o", "${workDir.absolutePath}/$prefix%(upload_date)s - %(title).100B [%(id)s].%(ext)s")
+                } else if (sectioned) {
+                    // Plage dans le nom : plusieurs extraits d'une même vidéo coexistent.
+                    addOption(
+                        "-o",
+                        "${workDir.absolutePath}/%(title).130B [%(section_start)ds-%(section_end)ds].%(ext)s",
+                    )
                 } else {
                     addOption("-o", "${workDir.absolutePath}/%(title).150B.%(ext)s")
                 }

@@ -245,6 +245,20 @@
     <string name="cat_stopped">⏸ Interrompu — catalogue partiel écrit.</string>
     <string name="cat_done_msg">%1$d fiches extraites (%2$d en échec).\n\nZip : Téléchargements/MKDownloader/Catalogue/%3$s\n\nContenu (détaillé dans le LISEZMOI.txt du zip) :\n• catalogue.csv — à ouvrir dans Excel/Sheets\n• catalogue.json — intégration site web\n• catalogue.html — galerie de vignettes cliquables, prête à coller dans une page</string>
     <string name="cat_share_zip">Partager le ZIP</string>
+
+    <!-- 🎬 Extraits + transcription -->
+    <string name="ext_menu">🎬 Extraits + transcription d\'une vidéo</string>
+    <string name="ext_title">🎬 Extraits + transcription</string>
+    <string name="ext_input_msg">Colle le lien d\'UNE vidéo : l\'app récupère sa retranscription horodatée (les sous-titres YouTube, automatiques si besoin) pour repérer les passages intéressants, puis découpe les plages que tu choisis en clips.\n\nFichiers écrits dans Téléchargements/MKDownloader/Extraits/ : la transcription et une fiche par extrait (source, minutage, mots exacts).</string>
+    <string name="ext_input_hint">Lien de la vidéo</string>
+    <string name="ext_fetching">Récupération de la transcription…</string>
+    <string name="ext_lines">%1$d lignes horodatées — langue : %2$s.\n🔎 Cherche un mot, note les minutages, saisis les plages en bas.</string>
+    <string name="ext_search_hint">🔎 Rechercher un mot (retraite, budget…)</string>
+    <string name="ext_ranges_hint">Plages à extraire : 12:40-12:55, 31:02-31:15</string>
+    <string name="ext_extract">⬇ Extraire les clips</string>
+    <string name="ext_share_txt">Partager la transcription</string>
+    <string name="ext_queued">%1$d extrait(s) ajoutés à la file 🎬 Fiche + transcription dans Téléchargements/MKDownloader/Extraits/</string>
+    <string name="ext_no_match">Aucune ligne ne contient ce mot.</string>
     <string name="bk_pl_loading">Récupération des playlists…</string>
     <string name="bk_pl_none">Aucune playlist trouvée (publiques uniquement — connecte ton compte YouTube dans ⚙ Comptes pour les autres).</string>
     <string name="bk_pl_pick_title">Playlists à archiver (%1$d)</string>

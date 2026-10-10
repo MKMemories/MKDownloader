@@ -838,6 +838,7 @@ class MainActivity : AppCompatActivity() {
         }
         actions += getString(R.string.set_relay) to { startActivity(Intent(this, RelayActivity::class.java)) }
         actions += (Backup.statusLabel(this) ?: getString(R.string.set_backup)) to { showBackupDialog() }
+        actions += getString(R.string.ext_menu) to { showExtractsDialog() }
         actions += getString(R.string.set_update_engine) to { updateEngine() }
         actions += getString(R.string.set_logs) to {
             runCatching { Logs.share(this) }.onFailure { toast(getString(R.string.logs_empty)) }
@@ -846,6 +847,133 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.set_title)
             .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
             .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    // ---------- 🎬 Extraits + transcription d'une vidéo ----------
+
+    private fun showExtractsDialog() {
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val input = android.widget.EditText(this).apply {
+            hint = getString(R.string.ext_input_hint)
+            setSingleLine(true)
+        }
+        val msg = android.widget.TextView(this).apply {
+            text = getString(R.string.ext_input_msg)
+            setPadding(0, 0, 0, (8 * d).toInt())
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(msg)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.ext_title)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
+            .setPositiveButton(R.string.bk_analyze) { _, _ ->
+                val url = input.text?.toString()?.trim().orEmpty()
+                if (url.isNotBlank()) fetchTranscript(url)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun fetchTranscript(url: String) {
+        setBusy(true, R.string.ext_fetching)
+        lifecycleScope.launch {
+            val result = runCatching { Extracts.fetch(this@MainActivity, url) }
+            setBusy(false)
+            result.onSuccess { showTranscriptDialog(it) }
+                .onFailure { toast(it.message ?: getString(R.string.bk_none)) }
+        }
+    }
+
+    /** Transcription horodatée + recherche de mots + plages à découper en clips. */
+    private fun showTranscriptDialog(t: Extracts.Transcript) {
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val info = android.widget.TextView(this).apply {
+            text = getString(
+                R.string.ext_lines, t.cues.size,
+                t.lang + if (t.auto) " (auto)" else "",
+            )
+            setPadding(0, 0, 0, (6 * d).toInt())
+        }
+        val search = android.widget.EditText(this).apply {
+            hint = getString(R.string.ext_search_hint)
+            setSingleLine(true)
+        }
+        val body = android.widget.TextView(this).apply {
+            textSize = 13f
+            setTextIsSelectable(true)
+        }
+        fun render(q: String) {
+            val f = t.cues.filter { q.isBlank() || it.text.contains(q, ignoreCase = true) }
+            val shown = f.take(600)
+            body.text = when {
+                f.isEmpty() -> getString(R.string.ext_no_match)
+                else -> shown.joinToString("\n") { "[${Extracts.fmt(it.sec)}] ${it.text}" } +
+                    (if (f.size > 600) "\n… +${f.size - 600}" else "")
+            }
+        }
+        render("")
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+            override fun afterTextChanged(s: android.text.Editable?) {
+                render(s?.toString().orEmpty())
+            }
+        })
+        val ranges = android.widget.EditText(this).apply {
+            hint = getString(R.string.ext_ranges_hint)
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(info)
+            addView(search)
+            addView(
+                android.widget.ScrollView(this@MainActivity).apply { addView(body) },
+                android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (280 * d).toInt(),
+                ),
+            )
+            addView(ranges)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(t.item.title)
+            .setView(box)
+            .setPositiveButton(R.string.ext_extract) { _, _ ->
+                runCatching { Extracts.parseRanges(ranges.text?.toString().orEmpty()) }
+                    .onFailure { toast(it.message ?: "?") }
+                    .onSuccess { rs ->
+                        Extracts.saveFiles(this, t, rs)
+                        val quality = QUALITIES.find { it.id == "mp4" } ?: QUALITIES.first()
+                        rs.forEach { (a, b) ->
+                            Downloads.start(this, t.item, quality, a, b)
+                        }
+                        toast(getString(R.string.ext_queued, rs.size))
+                    }
+            }
+            .setNeutralButton(R.string.ext_share_txt) { _, _ ->
+                val uri = Extracts.saveFiles(this, t, null)
+                if (uri == null) { toast(getString(R.string.bk_none)); return@setNeutralButton }
+                runCatching {
+                    startActivity(
+                        android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.parse(uri))
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            },
+                            getString(R.string.ext_share_txt),
+                        ),
+                    )
+                }
+            }
+            .setNegativeButton(R.string.close, null)
             .show()
     }
 
