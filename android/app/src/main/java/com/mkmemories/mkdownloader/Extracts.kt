@@ -31,6 +31,7 @@ object Extracts {
         val date: String,          // AAAA-MM-JJ
         val lang: String,          // langue de la piste retenue
         val auto: Boolean,         // true = sous-titres automatiques
+        val description: String,   // description YouTube de la vidéo
         val cues: List<Cue>,
     )
 
@@ -94,7 +95,7 @@ object Extracts {
             val vtt = httpGet(chosen.second)
             val cues = parseVtt(vtt)
             require(cues.isNotEmpty()) { "Transcription vide pour cette vidéo." }
-            Transcript(item, id, date, chosen.first, manual == null, cues)
+            Transcript(item, id, date, chosen.first, manual == null, o.optString("description"), cues)
         }
 
     private fun httpGet(url: String): String {
@@ -144,12 +145,16 @@ object Extracts {
     }
 
     fun toText(t: Transcript): String = buildString {
-        append("📝 TRANSCRIPTION — ").append(t.item.title).append('\n')
-        append("Source : ").append(t.item.url).append('\n')
-        append("Date de mise en ligne : ").append(t.date)
-        append("   Langue : ").append(t.lang)
-        if (t.auto) append(" (automatique — vérifier les mots exacts à l'écoute)")
-        append("\n\n")
+        append("TITRE : ").append(t.item.title).append('\n')
+        append("URL : ").append(t.item.url).append('\n')
+        append("DATE : ").append(t.date)
+        append("   LANGUE : ").append(t.lang)
+        if (t.auto) append(" (sous-titres automatiques — vérifier les mots exacts à l'écoute)")
+        append('\n')
+        t.item.channelName?.let { append("CHAÎNE : ").append(it).append('\n') }
+        append("\nDESCRIPTION :\n")
+        append(t.description.ifBlank { "(vide)" })
+        append("\n\nTRANSCRIPTION :\n")
         t.cues.forEach { append('[').append(fmt(it.sec)).append("] ").append(it.text).append('\n') }
     }
 

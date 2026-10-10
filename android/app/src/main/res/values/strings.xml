@@ -249,8 +249,8 @@
     <!-- 🎬 Extraits + transcription -->
     <string name="ext_menu">🎬 Extraits + transcription d\'une vidéo</string>
     <string name="ext_title">🎬 Extraits + transcription</string>
-    <string name="ext_input_msg">Colle le lien d\'UNE vidéo : l\'app récupère sa retranscription horodatée (les sous-titres YouTube, automatiques si besoin) pour repérer les passages intéressants, puis découpe les plages que tu choisis en clips.\n\nFichiers écrits dans Téléchargements/MKDownloader/Extraits/ : la transcription et une fiche par extrait (source, minutage, mots exacts).</string>
-    <string name="ext_input_hint">Lien de la vidéo</string>
+    <string name="ext_input_msg">UN lien : transcription horodatée à l\'écran (recherche de mots) + découpe de plages en clips.\n\nPLUSIEURS liens (un par ligne, 20 max) : export direct d\'un fichier .txt par vidéo — titre, URL, description puis transcription — dans Téléchargements/MKDownloader/Extraits/.</string>
+    <string name="ext_input_hint">Lien(s) de vidéo — un par ligne</string>
     <string name="ext_fetching">Récupération de la transcription…</string>
     <string name="ext_lines">%1$d lignes horodatées — langue : %2$s.\n🔎 Cherche un mot, note les minutages, saisis les plages en bas.</string>
     <string name="ext_search_hint">🔎 Rechercher un mot (retraite, budget…)</string>
@@ -259,6 +259,12 @@
     <string name="ext_share_txt">Partager la transcription</string>
     <string name="ext_queued">%1$d extrait(s) ajoutés à la file 🎬 Fiche + transcription dans Téléchargements/MKDownloader/Extraits/</string>
     <string name="ext_no_match">Aucune ligne ne contient ce mot.</string>
+    <string name="tr_export">📄 Exporter en .txt (titre + lien + description + transcription)</string>
+    <string name="tr_exported">📄 Fichier écrit dans Téléchargements/MKDownloader/Extraits/ :\nen-tête (titre, URL, description) puis transcription complète.</string>
+    <string name="ext_too_many">20 liens maximum par export (sélection à la main).</string>
+    <string name="ext_batch_running">Transcription %1$d / %2$d…</string>
+    <string name="ext_batch_done">%1$d transcription(s) exportée(s), %2$d en échec.\n\nUn fichier .txt par vidéo — titre, URL, description puis transcription — dans Téléchargements/MKDownloader/Extraits/.</string>
+    <string name="ext_share_files">Partager les .txt</string>
     <string name="bk_pl_loading">Récupération des playlists…</string>
     <string name="bk_pl_none">Aucune playlist trouvée (publiques uniquement — connecte ton compte YouTube dans ⚙ Comptes pour les autres).</string>
     <string name="bk_pl_pick_title">Playlists à archiver (%1$d)</string>

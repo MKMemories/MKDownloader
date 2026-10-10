@@ -29,6 +29,7 @@ class TranscriptActivity : AppCompatActivity() {
         ui.trBack.setOnClickListener { finish() }
         ui.trCopy.setOnClickListener { copy() }
         ui.trSynth.setOnClickListener { synthesize() }
+        ui.trExport.setOnClickListener { exportTxt() }
 
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
         if (url.isEmpty()) { finish(); return }
@@ -91,6 +92,46 @@ class TranscriptActivity : AppCompatActivity() {
                 if (k.isNotBlank()) { Mistral.setKey(this, k); synthesize() }
             }
             .show()
+    }
+
+    /**
+     * 📄 Export .txt : en-tête (titre, URL, description) puis transcription
+     * complète, écrit dans Téléchargements/MKDownloader/Extraits/.
+     */
+    private fun exportTxt() {
+        val url = intent.getStringExtra(EXTRA_URL).orEmpty()
+        if (url.isEmpty()) return
+        ui.trProgress.isVisible = true
+        ui.trExport.isEnabled = false
+        lifecycleScope.launch {
+            val result = runCatching {
+                val t = Extracts.fetch(this@TranscriptActivity, url)
+                Extracts.saveFiles(this@TranscriptActivity, t, null)
+                    ?: throw IllegalStateException(getString(R.string.tr_none))
+            }
+            ui.trProgress.isVisible = false
+            ui.trExport.isEnabled = true
+            result.onSuccess { uri ->
+                MaterialAlertDialogBuilder(this@TranscriptActivity)
+                    .setMessage(getString(R.string.tr_exported))
+                    .setNegativeButton(R.string.close, null)
+                    .setPositiveButton(R.string.ext_share_txt) { _, _ ->
+                        runCatching {
+                            startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_STREAM, android.net.Uri.parse(uri))
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    },
+                                    getString(R.string.ext_share_txt),
+                                ),
+                            )
+                        }
+                    }
+                    .show()
+            }.onFailure { toast(it.message ?: getString(R.string.tr_none)) }
+        }
     }
 
     private fun copy() {

@@ -857,7 +857,7 @@ class MainActivity : AppCompatActivity() {
         val pad = (20 * d).toInt()
         val input = android.widget.EditText(this).apply {
             hint = getString(R.string.ext_input_hint)
-            setSingleLine(true)
+            maxLines = 8
         }
         val msg = android.widget.TextView(this).apply {
             text = getString(R.string.ext_input_msg)
@@ -873,11 +873,87 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.ext_title)
             .setView(android.widget.ScrollView(this).apply { addView(box) })
             .setPositiveButton(R.string.bk_analyze) { _, _ ->
-                val url = input.text?.toString()?.trim().orEmpty()
-                if (url.isNotBlank()) fetchTranscript(url)
+                val links = input.text?.toString().orEmpty()
+                    .lines().map { it.trim() }.filter { it.isNotEmpty() }
+                when {
+                    links.isEmpty() -> Unit
+                    links.size == 1 -> fetchTranscript(links[0])
+                    links.size > 20 -> toast(getString(R.string.ext_too_many))
+                    else -> runTranscriptBatch(links)
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
+    }
+
+    /**
+     * 📄 Export par lot : pour chaque lien (sélection choisie à la main, 20 max),
+     * un fichier .txt « titre + URL + description + transcription » dans
+     * Téléchargements/MKDownloader/Extraits/.
+     */
+    private fun runTranscriptBatch(links: List<String>) {
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val label = android.widget.TextView(this).apply {
+            text = getString(R.string.ext_batch_running, 0, links.size)
+        }
+        val bar = android.widget.ProgressBar(
+            this, null, android.R.attr.progressBarStyleHorizontal,
+        ).apply { max = links.size }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(label)
+            addView(bar)
+        }
+        var stop = false
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.ext_title)
+            .setView(box)
+            .setCancelable(false)
+            .setNegativeButton(R.string.cancel) { _, _ -> stop = true }
+            .show()
+        lifecycleScope.launch {
+            val uris = arrayListOf<android.net.Uri>()
+            var errors = 0
+            for ((i, link) in links.withIndex()) {
+                if (stop) break
+                label.text = getString(R.string.ext_batch_running, i + 1, links.size)
+                bar.progress = i
+                val uri = runCatching {
+                    val t = Extracts.fetch(this@MainActivity, link)
+                    Extracts.saveFiles(this@MainActivity, t, null)
+                }.getOrNull()
+                if (uri != null) uris += android.net.Uri.parse(uri) else errors++
+            }
+            dialog.dismiss()
+            if (uris.isEmpty()) { toast(getString(R.string.bk_none)); return@launch }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.ext_title)
+                .setMessage(getString(R.string.ext_batch_done, uris.size, errors))
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.ext_share_files) { _, _ ->
+                    runCatching {
+                        startActivity(
+                            android.content.Intent.createChooser(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_SEND_MULTIPLE,
+                                ).apply {
+                                    type = "text/plain"
+                                    putParcelableArrayListExtra(
+                                        android.content.Intent.EXTRA_STREAM, uris,
+                                    )
+                                    addFlags(
+                                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                                    )
+                                },
+                                getString(R.string.ext_share_files),
+                            ),
+                        )
+                    }
+                }
+                .show()
+        }
     }
 
     private fun fetchTranscript(url: String) {

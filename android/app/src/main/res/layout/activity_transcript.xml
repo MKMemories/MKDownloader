@@ -51,6 +51,15 @@
         app:icon="@android:drawable/ic_menu_edit"
         android:text="@string/tr_synth" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/trExport"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/tr_export" />
+
     <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/trProgress"
         android:layout_width="match_parent"
