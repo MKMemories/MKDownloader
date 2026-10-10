@@ -180,17 +180,12 @@
     <string name="an_clips_queued">%1$d extrait(s) en file — %2$d ligne(s) ignorée(s).</string>
     <string name="an_clip_default">Extrait</string>
 
-    <!-- Transcription / synthèse (Mistral) -->
+    <!-- Transcription (sous-titres) -->
     <string name="tr_loading">Récupération des sous-titres…</string>
     <string name="tr_none">Aucun sous-titre disponible pour cette vidéo.</string>
-    <string name="tr_synth">✨ Synthèse factuelle (Mistral)</string>
-    <string name="tr_synth_header">SYNTHÈSE (Mistral) — factuelle et neutre</string>
     <string name="tr_transcript_header">TRANSCRIPTION</string>
     <string name="tr_copy">Copier</string>
     <string name="tr_copied">Copié dans le presse-papiers ✔</string>
-    <string name="tr_key_title">Clé API Mistral</string>
-    <string name="tr_key_hint">Clé API Mistral</string>
-    <string name="tr_key_note">Gratuite/à crédits sur console.mistral.ai → API Keys. Stockée uniquement sur ton téléphone.</string>
     <string name="dl_fetching_channel">Récupération des vidéos de la chaîne…</string>
     <string name="dl_batch_count">Télécharger %1$d vidéos — qualité ?</string>
     <string name="dl_batch_queued">%1$d ajoutés à la file.</string>

@@ -44,14 +44,6 @@
     </LinearLayout>
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/trSynth"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="12dp"
-        app:icon="@android:drawable/ic_menu_edit"
-        android:text="@string/tr_synth" />
-
-    <com.google.android.material.button.MaterialButton
         android:id="@+id/trExport"
         style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent"
