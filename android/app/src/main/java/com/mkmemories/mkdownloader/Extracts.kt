@@ -179,7 +179,7 @@ object Extracts {
         return ranges
     }
 
-    /** Lignes de transcription couvrant [a..b] (avec 5 s d'amorce). */
+    /** Lignes de transcription couvrant la plage a → b (avec 5 s d'amorce). */
     private fun excerpt(cues: List<Cue>, a: Int, b: Int): String =
         cues.filter { it.sec >= a - 5 && it.sec <= b }
             .joinToString("\n") { "[${fmt(it.sec)}] ${it.text}" }
