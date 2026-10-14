@@ -843,6 +843,7 @@ class MainActivity : AppCompatActivity() {
         }
         actions += getString(R.string.set_relay) to { startActivity(Intent(this, RelayActivity::class.java)) }
         actions += (Backup.statusLabel(this) ?: getString(R.string.set_backup)) to { showBackupDialog() }
+        actions += getString(R.string.cat_menu) to { showCatalogInputDialog() }
         actions += getString(R.string.ext_menu) to { showExtractsDialog() }
         actions += getString(R.string.plan_menu) to { showPlanDialog() }
         actions += getString(R.string.set_update_engine) to { updateEngine() }
@@ -1343,6 +1344,48 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------- 📇 Catalogue de chaîne (liens + infos, sans téléchargement) ----------
+
+    /** Accès DIRECT au catalogue depuis le menu ⚙ (sans passer par la sauvegarde). */
+    private fun showCatalogInputDialog() {
+        val d = resources.displayMetrics.density
+        val pad = (20 * d).toInt()
+        val input = android.widget.EditText(this).apply {
+            hint = getString(R.string.bk_input_hint)
+            setSingleLine(true)
+        }
+        val msg = android.widget.TextView(this).apply {
+            text = getString(R.string.cat_input_msg)
+            setPadding(0, 0, 0, (8 * d).toInt())
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(msg)
+            addView(input)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.cat_menu)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
+            .setPositiveButton(R.string.bk_analyze) { _, _ ->
+                val url = Backup.normalizeChannelUrl(input.text?.toString().orEmpty())
+                if (url.isNotBlank()) analyzeChannelForCatalog(url)
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun analyzeChannelForCatalog(url: String) {
+        setBusy(true, R.string.bk_analyzing)
+        lifecycleScope.launch {
+            val result = runCatching { Backup.analyze(this@MainActivity, url) }
+            setBusy(false)
+            result.onSuccess { (name, entries) ->
+                if (entries.isEmpty()) toast(getString(R.string.bk_none))
+                else showCatalogConfirm(name, entries)
+            }.onFailure { toast(it.message ?: getString(R.string.bk_none)) }
+        }
+    }
+
 
     private fun showCatalogConfirm(name: String, entries: List<Backup.Entry>) {
         MaterialAlertDialogBuilder(this)
