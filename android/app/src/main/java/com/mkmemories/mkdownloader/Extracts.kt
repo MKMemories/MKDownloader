@@ -48,6 +48,7 @@ object Extracts {
         context: Context,
         url: String,
         withComments: Boolean = false,
+        commentsOnly: Boolean = false,
     ): Transcript =
         withContext(Dispatchers.IO) {
             val app = context.applicationContext
@@ -56,7 +57,7 @@ object Extracts {
                 addOption("--dump-single-json")
                 addOption("--no-playlist")
                 addOption("--no-warnings")
-                if (withComments) {
+                if (withComments || commentsOnly) {
                     // Les ~200 meilleurs commentaires, intégrés au JSON.
                     addOption("--write-comments")
                     addOption(
@@ -86,34 +87,42 @@ object Extracts {
                 "${raw.substring(0, 4)}-${raw.substring(4, 6)}-${raw.substring(6, 8)}"
             } else raw
 
-            // Piste : sous-titres publiés d'abord, automatiques sinon.
-            val wanted = listOf(o.optString("language"), "fr", "fr-orig", "en").filter { it.isNotBlank() }
-            fun pick(obj: JSONObject?): Pair<String, String>? {   // (langue, url vtt)
-                obj ?: return null
-                val keys = obj.keys().asSequence().toList()
-                val lang = wanted.firstOrNull { w -> keys.any { it == w || it.startsWith("$w-") } }
-                    ?.let { w -> keys.first { it == w || it.startsWith("$w-") } }
-                    ?: keys.firstOrNull { it != "live_chat" } ?: return null
-                val tracks = obj.optJSONArray(lang) ?: return null
-                var best: String? = null
-                for (i in 0 until tracks.length()) {
-                    val t = tracks.optJSONObject(i) ?: continue
-                    val u = t.optString("url")
-                    if (u.isBlank()) continue
-                    if (t.optString("ext") == "vtt") { best = u; break }
-                    if (best == null) best = "$u&fmt=vtt"
+            // Piste : sous-titres publiés d'abord, automatiques sinon
+            // (sautée en mode « commentaires seuls »).
+            var lang = "-"
+            var auto = false
+            var cues: List<Cue> = emptyList()
+            if (!commentsOnly) {
+                val wanted = listOf(o.optString("language"), "fr", "fr-orig", "en").filter { it.isNotBlank() }
+                fun pick(obj: JSONObject?): Pair<String, String>? {   // (langue, url vtt)
+                    obj ?: return null
+                    val keys = obj.keys().asSequence().toList()
+                    val l = wanted.firstOrNull { w -> keys.any { it == w || it.startsWith("$w-") } }
+                        ?.let { w -> keys.first { it == w || it.startsWith("$w-") } }
+                        ?: keys.firstOrNull { it != "live_chat" } ?: return null
+                    val tracks = obj.optJSONArray(l) ?: return null
+                    var best: String? = null
+                    for (i in 0 until tracks.length()) {
+                        val t = tracks.optJSONObject(i) ?: continue
+                        val u = t.optString("url")
+                        if (u.isBlank()) continue
+                        if (t.optString("ext") == "vtt") { best = u; break }
+                        if (best == null) best = "$u&fmt=vtt"
+                    }
+                    return best?.let { l to it }
                 }
-                return best?.let { lang to it }
+                val manual = pick(o.optJSONObject("subtitles"))
+                val autoTrack = pick(o.optJSONObject("automatic_captions"))
+                val chosen = manual ?: autoTrack
+                    ?: throw IllegalStateException("Aucune transcription disponible pour cette vidéo.")
+                val vtt = httpGet(chosen.second)
+                cues = parseVtt(vtt)
+                require(cues.isNotEmpty()) { "Transcription vide pour cette vidéo." }
+                lang = chosen.first
+                auto = manual == null
             }
-            val manual = pick(o.optJSONObject("subtitles"))
-            val autoTrack = pick(o.optJSONObject("automatic_captions"))
-            val chosen = manual ?: autoTrack
-                ?: throw IllegalStateException("Aucune transcription disponible pour cette vidéo.")
-            val vtt = httpGet(chosen.second)
-            val cues = parseVtt(vtt)
-            require(cues.isNotEmpty()) { "Transcription vide pour cette vidéo." }
-            val comments = mutableListOf<Comment>()
-            if (withComments) {
+                        val comments = mutableListOf<Comment>()
+            if (withComments || commentsOnly) {
                 o.optJSONArray("comments")?.let { arr ->
                     for (i in 0 until minOf(arr.length(), 200)) {
                         val c = arr.optJSONObject(i) ?: continue
@@ -127,10 +136,12 @@ object Extracts {
                     }
                 }
             }
-            Transcript(
-                item, id, date, chosen.first, manual == null,
-                o.optString("description"), cues, comments,
-            )
+            if (commentsOnly) {
+                require(comments.isNotEmpty()) {
+                    "Aucun commentaire récupéré (désactivés sur cette vidéo ?)."
+                }
+            }
+            Transcript(item, id, date, lang, auto, o.optString("description"), cues, comments)
         }
 
     private fun httpGet(url: String): String {
@@ -183,14 +194,18 @@ object Extracts {
         append("TITRE : ").append(t.item.title).append('\n')
         append("URL : ").append(t.item.url).append('\n')
         append("DATE : ").append(t.date)
-        append("   LANGUE : ").append(t.lang)
-        if (t.auto) append(" (sous-titres automatiques — vérifier les mots exacts à l'écoute)")
+        if (t.cues.isNotEmpty()) {
+            append("   LANGUE : ").append(t.lang)
+            if (t.auto) append(" (sous-titres automatiques — vérifier les mots exacts à l'écoute)")
+        }
         append('\n')
         t.item.channelName?.let { append("CHAÎNE : ").append(it).append('\n') }
         append("\nDESCRIPTION :\n")
         append(t.description.ifBlank { "(vide)" })
-        append("\n\nTRANSCRIPTION :\n")
-        t.cues.forEach { append('[').append(fmt(it.sec)).append("] ").append(it.text).append('\n') }
+        if (t.cues.isNotEmpty()) {
+            append("\n\nTRANSCRIPTION :\n")
+            t.cues.forEach { append('[').append(fmt(it.sec)).append("] ").append(it.text).append('\n') }
+        }
         if (t.comments.isNotEmpty()) {
             append("\nCOMMENTAIRES (").append(t.comments.size)
             append(", tri « top » de YouTube) :\n")
@@ -260,9 +275,8 @@ object Extracts {
     fun saveFiles(context: Context, t: Transcript, ranges: List<Pair<Int, Int>>?): String? {
         val app = context.applicationContext
         val base = Backup.sanitizeName(t.item.title)
-        val uri = Backup.writeTextFile(
-            app, "MKDownloader/Extraits", "Transcription - $base.txt", toText(t),
-        )
+        val fileName = if (t.cues.isEmpty()) "Commentaires - $base.txt" else "Transcription - $base.txt"
+        val uri = Backup.writeTextFile(app, "MKDownloader/Extraits", fileName, toText(t))
         if (ranges != null) {
             Backup.writeTextFile(
                 app, "MKDownloader/Extraits", "Extraits - $base.txt", ficheText(t, ranges),

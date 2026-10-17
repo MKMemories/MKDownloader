@@ -268,6 +268,12 @@
     <string name="cmt_without">Sans</string>
     <string name="cmt_count">💬 %1$d commentaire(s) récupéré(s) — affichés en bas et inclus dans l\'export .txt.</string>
     <string name="cmt_none_found">💬 Aucun commentaire récupéré (désactivés sur cette vidéo ?).</string>
+    <string name="ext_mode_t">📝 Transcription seule</string>
+    <string name="ext_mode_tc">📝 + 💬 Transcription et commentaires</string>
+    <string name="ext_mode_c">💬 Commentaires SEULS</string>
+    <string name="cmt_export_btn">📄 Exporter (.txt)</string>
+    <string name="cmt_share">Partager les commentaires</string>
+    <string name="cmt_exported">📄 Commentaires exportés : Téléchargements/MKDownloader/Extraits/« Commentaires - … .txt »</string>
     <string name="file_write_failed">Échec d\'écriture dans Téléchargements. Détail dans ⚙ → Exporter le journal (lignes [fichiers]).</string>
 
     <!-- ⛓ Plan de téléchargement -->

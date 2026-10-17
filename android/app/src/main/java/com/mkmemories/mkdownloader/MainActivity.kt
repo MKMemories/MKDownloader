@@ -937,15 +937,25 @@ class MainActivity : AppCompatActivity() {
             text = getString(R.string.ext_input_msg)
             setPadding(0, 0, 0, (8 * d).toInt())
         }
-        val withComments = android.widget.CheckBox(this).apply {
-            text = getString(R.string.cmt_include)
-        }
+        var mode = 0   // 0 = transcription, 1 = + commentaires, 2 = commentaires seuls
+        val modes = android.widget.RadioGroup(this)
+        listOf(R.string.ext_mode_t, R.string.ext_mode_tc, R.string.ext_mode_c)
+            .forEachIndexed { i, res ->
+                modes.addView(
+                    android.widget.RadioButton(this).apply {
+                        text = getString(res)
+                        id = android.view.View.generateViewId()
+                        isChecked = i == 0
+                        setOnClickListener { mode = i }
+                    },
+                )
+            }
         val box = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(pad, pad / 2, pad, 0)
             addView(msg)
             addView(input)
-            addView(withComments)
+            addView(modes)
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.ext_title)
@@ -953,12 +963,11 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.bk_analyze) { _, _ ->
                 val links = input.text?.toString().orEmpty()
                     .lines().map { it.trim() }.filter { it.isNotEmpty() }
-                val cmts = withComments.isChecked
                 when {
                     links.isEmpty() -> Unit
-                    links.size == 1 -> fetchTranscript(links[0], cmts)
+                    links.size == 1 -> fetchTranscript(links[0], mode)
                     links.size > 20 -> toast(getString(R.string.ext_too_many))
-                    else -> runTranscriptBatch(links, cmts)
+                    else -> runTranscriptBatch(links, mode)
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -970,7 +979,9 @@ class MainActivity : AppCompatActivity() {
      * un fichier .txt « titre + URL + description + transcription » dans
      * Téléchargements/MKDownloader/Extraits/.
      */
-    private fun runTranscriptBatch(links: List<String>, withComments: Boolean = false) {
+    private fun runTranscriptBatch(links: List<String>, mode: Int = 0) {
+        val withComments = mode >= 1
+        val commentsOnly = mode == 2
         val d = resources.displayMetrics.density
         val pad = (20 * d).toInt()
         val label = android.widget.TextView(this).apply {
@@ -1000,7 +1011,7 @@ class MainActivity : AppCompatActivity() {
                 label.text = getString(R.string.ext_batch_running, i + 1, links.size)
                 bar.progress = i
                 val uri = runCatching {
-                    val t = Extracts.fetch(this@MainActivity, link, withComments)
+                    val t = Extracts.fetch(this@MainActivity, link, withComments, commentsOnly)
                     Extracts.saveFiles(this@MainActivity, t, null)
                 }.getOrNull()
                 if (uri != null) uris += android.net.Uri.parse(uri) else errors++
@@ -1035,27 +1046,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchTranscript(url: String, withComments: Boolean = false) {
+    private fun fetchTranscript(url: String, mode: Int = 0) {
+        val withComments = mode >= 1
+        val commentsOnly = mode == 2
         setBusy(true, R.string.ext_fetching)
         lifecycleScope.launch {
-            val result = runCatching { Extracts.fetch(this@MainActivity, url, withComments) }
+            val result = runCatching {
+                Extracts.fetch(this@MainActivity, url, withComments, commentsOnly)
+            }
             setBusy(false)
-            result.onSuccess { showTranscriptDialog(it, withComments) }
+            result.onSuccess { showTranscriptDialog(it, withComments, commentsOnly) }
                 .onFailure { toast(it.message ?: getString(R.string.bk_none)) }
         }
     }
 
     /** Transcription horodatée + commentaires + recherche + plages à découper. */
-    private fun showTranscriptDialog(t: Extracts.Transcript, withComments: Boolean = false) {
+    private fun showTranscriptDialog(
+        t: Extracts.Transcript,
+        withComments: Boolean = false,
+        commentsOnly: Boolean = false,
+    ) {
         val d = resources.displayMetrics.density
         val pad = (20 * d).toInt()
         val info = android.widget.TextView(this).apply {
-            var txt = getString(
+            var txt = if (commentsOnly) "" else getString(
                 R.string.ext_lines, t.cues.size,
                 t.lang + if (t.auto) " (auto)" else "",
             )
-            if (t.comments.isNotEmpty()) txt += "\n" + getString(R.string.cmt_count, t.comments.size)
-            else if (withComments) txt += "\n" + getString(R.string.cmt_none_found)
+            if (t.comments.isNotEmpty()) {
+                txt += (if (txt.isEmpty()) "" else "\n") + getString(R.string.cmt_count, t.comments.size)
+            } else if (withComments) {
+                txt += (if (txt.isEmpty()) "" else "\n") + getString(R.string.cmt_none_found)
+            }
             text = txt
             setPadding(0, 0, 0, (6 * d).toInt())
         }
@@ -1108,12 +1130,22 @@ class MainActivity : AppCompatActivity() {
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (280 * d).toInt(),
                 ),
             )
-            addView(ranges)
+            if (!commentsOnly) addView(ranges)
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(t.item.title)
             .setView(box)
-            .setPositiveButton(R.string.ext_extract) { _, _ ->
+            .setPositiveButton(
+                if (commentsOnly) R.string.cmt_export_btn else R.string.ext_extract,
+            ) { _, _ ->
+                if (commentsOnly) {
+                    val uri = Extracts.saveFiles(this, t, null)
+                    toast(
+                        if (uri != null) getString(R.string.cmt_exported)
+                        else getString(R.string.file_write_failed),
+                    )
+                    return@setPositiveButton
+                }
                 runCatching { Extracts.parseRanges(ranges.text?.toString().orEmpty()) }
                     .onFailure { toast(it.message ?: "?") }
                     .onSuccess { rs ->
@@ -1125,7 +1157,9 @@ class MainActivity : AppCompatActivity() {
                         toast(getString(R.string.ext_queued, rs.size))
                     }
             }
-            .setNeutralButton(R.string.ext_share_txt) { _, _ ->
+            .setNeutralButton(
+                if (commentsOnly) R.string.cmt_share else R.string.ext_share_txt,
+            ) { _, _ ->
                 val uri = Extracts.saveFiles(this, t, null)
                 if (uri == null) { toast(getString(R.string.file_write_failed)); return@setNeutralButton }
                 runCatching {
