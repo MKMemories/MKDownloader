@@ -25,6 +25,9 @@ object Extracts {
     /** Une ligne de transcription : seconde de début + texte nettoyé. */
     data class Cue(val sec: Int, val text: String)
 
+    /** Un commentaire récupéré (tri « top » de YouTube). */
+    data class Comment(val author: String, val likes: Long, val text: String)
+
     data class Transcript(
         val item: VideoItem,       // pour mettre les clips en file
         val id: String,
@@ -33,6 +36,7 @@ object Extracts {
         val auto: Boolean,         // true = sous-titres automatiques
         val description: String,   // description YouTube de la vidéo
         val cues: List<Cue>,
+        val comments: List<Comment> = emptyList(),
     )
 
     /**
@@ -40,7 +44,11 @@ object Extracts {
      * contient les adresses des pistes de sous-titres ; on télécharge ensuite
      * la piste choisie (manuelle de préférence, sinon automatique).
      */
-    suspend fun fetch(context: Context, url: String): Transcript =
+    suspend fun fetch(
+        context: Context,
+        url: String,
+        withComments: Boolean = false,
+    ): Transcript =
         withContext(Dispatchers.IO) {
             val app = context.applicationContext
             Engine.ensureReady(app)
@@ -48,7 +56,16 @@ object Extracts {
                 addOption("--dump-single-json")
                 addOption("--no-playlist")
                 addOption("--no-warnings")
-                addOption("--extractor-args", Engine.YT_ARGS)
+                if (withComments) {
+                    // Les ~200 meilleurs commentaires, intégrés au JSON.
+                    addOption("--write-comments")
+                    addOption(
+                        "--extractor-args",
+                        Engine.YT_ARGS + ";comment_sort=top;max_comments=200,100,10",
+                    )
+                } else {
+                    addOption("--extractor-args", Engine.YT_ARGS)
+                }
                 Settings.cookiesForUrl(app, url)?.let { addOption("--cookies", it.absolutePath) }
             }
             val out = YoutubeDL.getInstance().execute(request, null, null).out
@@ -95,7 +112,25 @@ object Extracts {
             val vtt = httpGet(chosen.second)
             val cues = parseVtt(vtt)
             require(cues.isNotEmpty()) { "Transcription vide pour cette vidéo." }
-            Transcript(item, id, date, chosen.first, manual == null, o.optString("description"), cues)
+            val comments = mutableListOf<Comment>()
+            if (withComments) {
+                o.optJSONArray("comments")?.let { arr ->
+                    for (i in 0 until minOf(arr.length(), 200)) {
+                        val c = arr.optJSONObject(i) ?: continue
+                        val txt = c.optString("text").trim()
+                        if (txt.isEmpty()) continue
+                        comments += Comment(
+                            author = c.optString("author").ifBlank { "?" },
+                            likes = c.optLong("like_count", 0L),
+                            text = txt,
+                        )
+                    }
+                }
+            }
+            Transcript(
+                item, id, date, chosen.first, manual == null,
+                o.optString("description"), cues, comments,
+            )
         }
 
     private fun httpGet(url: String): String {
@@ -156,6 +191,15 @@ object Extracts {
         append(t.description.ifBlank { "(vide)" })
         append("\n\nTRANSCRIPTION :\n")
         t.cues.forEach { append('[').append(fmt(it.sec)).append("] ").append(it.text).append('\n') }
+        if (t.comments.isNotEmpty()) {
+            append("\nCOMMENTAIRES (").append(t.comments.size)
+            append(", tri « top » de YouTube) :\n")
+            t.comments.forEach { c ->
+                append("\n— ").append(c.author)
+                if (c.likes > 0) append(" (").append(c.likes).append(" 👍)")
+                append(" :\n").append(c.text).append('\n')
+            }
+        }
     }
 
     /**

@@ -937,11 +937,15 @@ class MainActivity : AppCompatActivity() {
             text = getString(R.string.ext_input_msg)
             setPadding(0, 0, 0, (8 * d).toInt())
         }
+        val withComments = android.widget.CheckBox(this).apply {
+            text = getString(R.string.cmt_include)
+        }
         val box = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(pad, pad / 2, pad, 0)
             addView(msg)
             addView(input)
+            addView(withComments)
         }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.ext_title)
@@ -949,11 +953,12 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.bk_analyze) { _, _ ->
                 val links = input.text?.toString().orEmpty()
                     .lines().map { it.trim() }.filter { it.isNotEmpty() }
+                val cmts = withComments.isChecked
                 when {
                     links.isEmpty() -> Unit
-                    links.size == 1 -> fetchTranscript(links[0])
+                    links.size == 1 -> fetchTranscript(links[0], cmts)
                     links.size > 20 -> toast(getString(R.string.ext_too_many))
-                    else -> runTranscriptBatch(links)
+                    else -> runTranscriptBatch(links, cmts)
                 }
             }
             .setNegativeButton(R.string.cancel, null)
@@ -965,7 +970,7 @@ class MainActivity : AppCompatActivity() {
      * un fichier .txt « titre + URL + description + transcription » dans
      * Téléchargements/MKDownloader/Extraits/.
      */
-    private fun runTranscriptBatch(links: List<String>) {
+    private fun runTranscriptBatch(links: List<String>, withComments: Boolean = false) {
         val d = resources.displayMetrics.density
         val pad = (20 * d).toInt()
         val label = android.widget.TextView(this).apply {
@@ -995,7 +1000,7 @@ class MainActivity : AppCompatActivity() {
                 label.text = getString(R.string.ext_batch_running, i + 1, links.size)
                 bar.progress = i
                 val uri = runCatching {
-                    val t = Extracts.fetch(this@MainActivity, link)
+                    val t = Extracts.fetch(this@MainActivity, link, withComments)
                     Extracts.saveFiles(this@MainActivity, t, null)
                 }.getOrNull()
                 if (uri != null) uris += android.net.Uri.parse(uri) else errors++
@@ -1030,10 +1035,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchTranscript(url: String) {
+    private fun fetchTranscript(url: String, withComments: Boolean = false) {
         setBusy(true, R.string.ext_fetching)
         lifecycleScope.launch {
-            val result = runCatching { Extracts.fetch(this@MainActivity, url) }
+            val result = runCatching { Extracts.fetch(this@MainActivity, url, withComments) }
             setBusy(false)
             result.onSuccess { showTranscriptDialog(it) }
                 .onFailure { toast(it.message ?: getString(R.string.bk_none)) }

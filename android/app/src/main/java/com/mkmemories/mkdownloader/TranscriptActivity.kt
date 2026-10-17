@@ -56,13 +56,21 @@ class TranscriptActivity : AppCompatActivity() {
      * complète, écrit dans Téléchargements/MKDownloader/Extraits/.
      */
     private fun exportTxt() {
+        MaterialAlertDialogBuilder(this)
+            .setMessage(R.string.tr_export_comments)
+            .setPositiveButton(R.string.cmt_with) { _, _ -> doExport(true) }
+            .setNegativeButton(R.string.cmt_without) { _, _ -> doExport(false) }
+            .show()
+    }
+
+    private fun doExport(withComments: Boolean) {
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
         if (url.isEmpty()) return
         ui.trProgress.isVisible = true
         ui.trExport.isEnabled = false
         lifecycleScope.launch {
             val result = runCatching {
-                val t = Extracts.fetch(this@TranscriptActivity, url)
+                val t = Extracts.fetch(this@TranscriptActivity, url, withComments)
                 Extracts.saveFiles(this@TranscriptActivity, t, null)
                     ?: throw IllegalStateException(getString(R.string.file_write_failed))
             }

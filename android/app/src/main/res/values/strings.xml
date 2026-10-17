@@ -262,6 +262,10 @@
     <string name="ext_batch_running">Transcription %1$d / %2$d…</string>
     <string name="ext_batch_done">%1$d transcription(s) exportée(s), %2$d en échec.\n\nUn fichier .txt par vidéo — titre, URL, description puis transcription — dans Téléchargements/MKDownloader/Extraits/.</string>
     <string name="ext_share_files">Partager les .txt</string>
+    <string name="cmt_include">💬 Inclure les commentaires (les ~200 meilleurs — plus lent)</string>
+    <string name="tr_export_comments">Inclure les commentaires dans le fichier ?\n(les ~200 meilleurs, tri « top » — la récupération est un peu plus longue)</string>
+    <string name="cmt_with">Avec commentaires</string>
+    <string name="cmt_without">Sans</string>
     <string name="file_write_failed">Échec d\'écriture dans Téléchargements. Détail dans ⚙ → Exporter le journal (lignes [fichiers]).</string>
 
     <!-- ⛓ Plan de téléchargement -->
