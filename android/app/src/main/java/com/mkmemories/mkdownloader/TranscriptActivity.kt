@@ -64,7 +64,7 @@ class TranscriptActivity : AppCompatActivity() {
             val result = runCatching {
                 val t = Extracts.fetch(this@TranscriptActivity, url)
                 Extracts.saveFiles(this@TranscriptActivity, t, null)
-                    ?: throw IllegalStateException(getString(R.string.tr_none))
+                    ?: throw IllegalStateException(getString(R.string.file_write_failed))
             }
             ui.trProgress.isVisible = false
             ui.trExport.isEnabled = true

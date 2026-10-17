@@ -1109,7 +1109,7 @@ class MainActivity : AppCompatActivity() {
             }
             .setNeutralButton(R.string.ext_share_txt) { _, _ ->
                 val uri = Extracts.saveFiles(this, t, null)
-                if (uri == null) { toast(getString(R.string.bk_none)); return@setNeutralButton }
+                if (uri == null) { toast(getString(R.string.file_write_failed)); return@setNeutralButton }
                 runCatching {
                     startActivity(
                         android.content.Intent.createChooser(
@@ -1433,7 +1433,8 @@ class MainActivity : AppCompatActivity() {
                     .setTitle(R.string.cat_done_title)
                     .setMessage(
                         (if (r.cancelled) getString(R.string.cat_stopped) + "\n\n" else "") +
-                            getString(R.string.cat_done_msg, r.count, r.errors, r.zipName),
+                            getString(R.string.cat_done_msg, r.count, r.errors, r.zipName) +
+                            (if (r.zipUri == null) "\n\n⚠ " + getString(R.string.file_write_failed) else ""),
                     )
                     .setNegativeButton(R.string.close, null)
                 r.zipUri?.let { uri ->

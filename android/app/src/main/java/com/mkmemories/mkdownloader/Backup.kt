@@ -432,7 +432,12 @@ object Backup {
         mime: String = "text/plain",
     ): String? = writeBinaryFile(context, subDir, name, text.toByteArray(), mime)
 
-    /** Écrit (en remplaçant) un fichier BINAIRE dans Téléchargements/<subDir>/. */
+    /**
+     * Écrit (en remplaçant) un fichier BINAIRE dans Téléchargements/<subDir>/.
+     * Réécriture SUR PLACE si le fichier existe déjà (l\u0027ancien schéma
+     * « supprimer puis recréer » laissait un dossier vide quand la recréation
+     * échouait). Chaque étape est tracée dans le journal (⚙ Exporter le journal).
+     */
     internal fun writeBinaryFile(
         context: Context,
         subDir: String,
@@ -441,9 +446,10 @@ object Backup {
         mime: String,
     ): String? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            return runCatching {
-                val resolver = context.contentResolver
-                // Supprime l\u0027ancienne version (sinon MediaStore crée « (1) »).
+            val resolver = context.contentResolver
+            val relPath = Environment.DIRECTORY_DOWNLOADS + "/" + subDir
+            // 1) Déjà présent → réécrit le MÊME fichier ("wt" = tronque).
+            runCatching {
                 resolver.query(
                     MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                     arrayOf(MediaStore.MediaColumns._ID),
@@ -451,27 +457,35 @@ object Backup {
                     arrayOf("%$subDir%", name),
                     null,
                 )?.use { c ->
-                    val idCol = c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
-                    while (c.moveToNext()) {
-                        runCatching {
-                            resolver.delete(
-                                android.content.ContentUris.withAppendedId(
-                                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(idCol),
-                                ),
-                                null, null,
-                            )
-                        }
+                    if (c.moveToFirst()) {
+                        val uri = android.content.ContentUris.withAppendedId(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            c.getLong(c.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)),
+                        )
+                        resolver.openOutputStream(uri, "wt")!!.use { it.write(bytes) }
+                        Logs.d("fichiers", "réécrit $relPath/$name (${bytes.size} octets)")
+                        return uri.toString()
                     }
                 }
+            }.onFailure {
+                Logs.w("fichiers", "réécriture de $name impossible (${it.message}) — on recrée")
+            }
+            // 2) Sinon : création (MediaStore crée le dossier au passage).
+            return runCatching {
                 val values = android.content.ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + subDir)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, relPath)
                     put(MediaStore.MediaColumns.MIME_TYPE, mime)
                 }
                 val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                    ?: return@runCatching null
-                resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: error("insert MediaStore refusé (uri nulle)")
+                val out = resolver.openOutputStream(uri)
+                    ?: error("openOutputStream nul sur $uri")
+                out.use { it.write(bytes) }
+                Logs.d("fichiers", "écrit $relPath/$name (${bytes.size} octets)")
                 uri.toString()
+            }.onFailure {
+                Logs.e("fichiers", "ÉCHEC d\u0027écriture $relPath/$name", it)
             }.getOrNull()
         } else {
             return runCatching {
@@ -479,8 +493,10 @@ object Backup {
                 dir.mkdirs()
                 val f = File(dir, name)
                 f.writeBytes(bytes)
+                Logs.d("fichiers", "écrit (legacy) ${f.absolutePath} (${bytes.size} octets)")
                 android.net.Uri.fromFile(f).toString()
-            }.getOrNull()
+            }.onFailure { Logs.e("fichiers", "ÉCHEC d\u0027écriture (legacy) $subDir/$name", it) }
+                .getOrNull()
         }
     }
 
