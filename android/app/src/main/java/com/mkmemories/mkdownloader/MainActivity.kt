@@ -1040,20 +1040,23 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val result = runCatching { Extracts.fetch(this@MainActivity, url, withComments) }
             setBusy(false)
-            result.onSuccess { showTranscriptDialog(it) }
+            result.onSuccess { showTranscriptDialog(it, withComments) }
                 .onFailure { toast(it.message ?: getString(R.string.bk_none)) }
         }
     }
 
-    /** Transcription horodatée + recherche de mots + plages à découper en clips. */
-    private fun showTranscriptDialog(t: Extracts.Transcript) {
+    /** Transcription horodatée + commentaires + recherche + plages à découper. */
+    private fun showTranscriptDialog(t: Extracts.Transcript, withComments: Boolean = false) {
         val d = resources.displayMetrics.density
         val pad = (20 * d).toInt()
         val info = android.widget.TextView(this).apply {
-            text = getString(
+            var txt = getString(
                 R.string.ext_lines, t.cues.size,
                 t.lang + if (t.auto) " (auto)" else "",
             )
+            if (t.comments.isNotEmpty()) txt += "\n" + getString(R.string.cmt_count, t.comments.size)
+            else if (withComments) txt += "\n" + getString(R.string.cmt_none_found)
+            text = txt
             setPadding(0, 0, 0, (6 * d).toInt())
         }
         val search = android.widget.EditText(this).apply {
@@ -1064,13 +1067,23 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             setTextIsSelectable(true)
         }
+        val cueLines = t.cues.map { "[${Extracts.fmt(it.sec)}] ${it.text}" }
+        val cmtLines = t.comments.map { c ->
+            "— ${c.author}" + (if (c.likes > 0) " (${c.likes} 👍)" else "") + " : ${c.text}"
+        }
         fun render(q: String) {
-            val f = t.cues.filter { q.isBlank() || it.text.contains(q, ignoreCase = true) }
-            val shown = f.take(600)
-            body.text = when {
-                f.isEmpty() -> getString(R.string.ext_no_match)
-                else -> shown.joinToString("\n") { "[${Extracts.fmt(it.sec)}] ${it.text}" } +
-                    (if (f.size > 600) "\n… +${f.size - 600}" else "")
+            val fc = cueLines.filter { q.isBlank() || it.contains(q, ignoreCase = true) }
+            val fm = cmtLines.filter { q.isBlank() || it.contains(q, ignoreCase = true) }
+            body.text = buildString {
+                append(fc.take(600).joinToString("\n"))
+                if (fc.size > 600) append("\n… +${fc.size - 600}")
+                if (fm.isNotEmpty()) {
+                    if (isNotEmpty()) append("\n\n")
+                    append("💬 COMMENTAIRES (${fm.size}) :\n")
+                    append(fm.take(200).joinToString("\n\n"))
+                    if (fm.size > 200) append("\n… +${fm.size - 200}")
+                }
+                if (isEmpty()) append(getString(R.string.ext_no_match))
             }
         }
         render("")
